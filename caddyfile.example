@@ -1,0 +1,50 @@
+domain.com {
+    encode gzip zstd
+
+    # ── Статика фронта (Vue bundle: JS/CSS chunks) ────────────────
+    handle /assets/* {
+        root * /var/www/neurochat/frontend/dist
+        file_server
+    }
+
+    # ── API ──────────────────────────────────────────────────────
+    handle /api/* {
+        root * /var/www/neurochat/backend
+        php_fastcgi unix//run/php/php-fpm.sock
+    }
+
+    # ── Auth ─────────────────────────────────────────────────────
+    handle /auth/* {
+        root * /var/www/neurochat/backend
+        php_fastcgi unix//run/php/php-fpm.sock
+    }
+
+
+
+    # ── Uploads / файлы ───────────────────────────────────────────
+    handle /files/docs/* {
+        root * /var/www/neurochat/backend
+        header Content-Type text/plain
+        header X-Content-Type-Options nosniff
+        header Content-Disposition inline
+        file_server
+    }
+    handle /files/photos/* {
+        root * /var/www/neurochat/backend
+        file_server
+    }
+
+    # ── Backend PHP (корневые файлы) ──────────────────────────────
+    @root_php path /*.php
+    handle @root_php {
+        root * /var/www/neurochat/backend
+        php_fastcgi unix//run/php/php-fpm.sock
+    }
+
+    # ── Frontend SPA (Vue) ────────────────────────────────────────
+    handle {
+        root * /var/www/neurochat/frontend/dist
+        try_files {path} /index.html
+        file_server
+    }
+}

@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build output
+frontend/dist/
+
+# Environment
+backend/.env
+*.env
+backend/fcm-service-account.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PHP
+*.log
+
+# Temp
+/tmp/
+*.swp
+*.swo
+
+# Backup and Deployment
+archive/
+deploy.sh
+
+# AI Agents
+.agents/
+
+# Загруженные пользователями файлы (скрываем содержимое папки, но оставляем структуру)
+backend/files/*
+!backend/files/.gitkeep

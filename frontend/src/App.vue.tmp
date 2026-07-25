@@ -1,0 +1,400 @@
+<template>
+  <div v-if="!isAppLoaded" class="app-loader"></div>
+  <AuthPage v-else-if="!currentUser || !currentUser.is_approved" :user="currentUser" />
+  <AdminPage v-else-if="isAdminRoute" :currentUser="currentUser" @close="closeAdmin" />
+  <div v-else class="app" :class="{ 'focus-mode': focusMode }">
+    <!-- Focus BG -->
+    <div class="focus-bg" id="focus-bg">
+      <video v-if="focusBgUrl && isVideo(focusBgUrl)" :src="focusBgUrl" autoplay loop muted playsinline></video>
+      <img v-else-if="focusBgUrl" :src="focusBgUrl" alt="">
+    </div>
+
+    <!-- Sidebar -->
+    <Sidebar
+      :isOpen="sidebarOpen"
+      :chats="historyChats"
+      :projects="projects"
+      :projectChats="projectChats"
+      :currentProject="currentProject"
+      :currentChatId="state.chatId"
+      :currentUser="currentUser"
+      :isLight="isLight"
+      @new-chat="newChat(false)"
+      @temp-chat="newChat(true)"
+      @select-chat="onSelectChat"
+      @delete-chat="onDeleteChat"
+      @select-project="onSelectProject"
+      @back-projects="onBackProjects"
+      @create-project="onCreateProject"
+      @rename-project="onRenameProject"
+      @delete-project="onDeleteProject"
+      @add-to-project="onAddToProject"
+      @remove-from-project="onRemoveFromProject"
+      @rename-chat="onRenameChat"
+      @search="onSearchHistory"
+      @toggle-theme="toggleTheme"
+      @import-chat="importChatHandler"
+      @open-settings="isSettingsOpen = true"
+      @open-menu="isMenuOpen = true"
+    />
+
+    <!-- Sidebar overlay (mobile) -->
+    <div
+      class="sidebar-overlay"
+      :class="{ visible: sidebarOpen }"
+      @click="sidebarOpen = false"
+      id="sidebar-overlay"
+    ></div>
+
+    <!-- Main area -->
+    <div class="main">
+      <!-- Top bar -->
+      <div class="topbar">
+        <button class="btn-toggle-sidebar" @click="sidebarOpen = !sidebarOpen" title="Боковая панель" id="btn-toggle-sidebar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M9 3v18"/>
+          </svg>
+        </button>
+        <div class="chat-title" id="chat-title">{{ chatTitle }}</div>
+        <div class="model-indicator" :style="{ color: modelIndicatorColor, backgroundColor: modelIndicatorColor + '1f' }" id="model-indicator">{{ modelIndicatorText }}</div>
+
+        <button
+          class="btn-share"
+          v-if="state.chatId && !state.isTemp && state.messages.length > 0"
+          @click="onShare"
+          title="Поделиться"
+          id="btn-share"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Chat area -->
+      <ChatArea
+        ref="chatAreaRef"
+        :messages="state.messages"
+        :isLoading="state.isLoading"
+        :model="state.model"
+        :streamingContent="streamingHtml"
+        :currentUser="currentUser"
+        @insert-prompt="onInsertPrompt"
+        @save-edit-message="onSaveEditMessage"
+        @retry-message="onRetryMessage"
+        @open-lightbox="() => {}"
+      />
+
+      <!-- Message input -->
+      <MessageInput
+        ref="messageInputRef"
+        v-model:messageText="messageText"
+        v-model:model="state.model"
+        v-model:currentMode="state.currentMode"
+        :isLoading="state.isLoading"
+        :attachedFiles="state.attachedFiles"
+        :useSearch="state.useSearch"
+        :temperature="state.temperature"
+        :currentUser="currentUser"
+        @send="sendMessage"
+        @update:model="onModelChange"
+        @remove-file="onRemoveFile"
+        @files-selected="onFilesSelected"
+        @toggle-search="toggleSearch"
+        @show-context-history="showContextHistory"
+        @toggle-focus="focusMode = !focusMode"
+        @update:temperature="t => state.temperature = t"
+      />
+    </div>
+
+
+    <!-- Settings Modal -->
+    <SettingsModal v-if="isSettingsOpen" @close="closeSettings" @user-updated="reloadUser" />
+
+    <!-- Share Preview Modal -->
+    <ShareModal v-if="sharedToken" :token="sharedToken" @close="sharedToken = null; setUrl('')" @continued="onShareContinued" />
+
+    <!-- Share Link Generation Modal -->
+    <ShareLinkModal v-if="isShareLinkModalOpen" :chatId="state.chatId" @close="isShareLinkModalOpen = false" />
+
+    <!-- Menu Modal -->
+    <MenuModal v-if="isMenuOpen" :currentUser="currentUser" @close="isMenuOpen = false" @open-info="onOpenInfo" />
+
+    <!-- Info/Doc Modal -->
+    <InfoModal v-if="infoDocType" :docType="infoDocType" @close="infoDocType = null" @back="onInfoBack" />
+
+    <ConfirmModal
+      v-if="confirmModal.isOpen"
+      :title="confirmModal.title"
+      :message="confirmModal.message"
+      :confirmText="confirmModal.confirmText"
+      @confirm="confirmModal.onConfirm"
+      @cancel="confirmModal.isOpen = false"
+    />
+
+    <ToastNotification />
+
+    <!-- Request History Modal -->
+    <RequestHistoryModal 
+      v-if="showHistoryModal" 
+      :messages="historyMessages"
+      @close="showHistoryModal = false" 
+    />
+
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted, nextTick, onBeforeUnmount, reactive, computed, watch } from 'vue';
+import DOMPurify from 'dompurify';
+import { renderMarkdown, autoCloseMarkdown, formatMd } from './utils/markdown';
+import Sidebar from './components/Sidebar.vue';
+import ChatArea from './components/ChatArea.vue';
+import MessageInput from './components/MessageInput.vue';
+import SettingsModal from './components/SettingsModal.vue';
+import ShareModal from './components/ShareModal.vue';
+import ShareLinkModal from './components/ShareLinkModal.vue';
+import MenuModal from './components/MenuModal.vue';
+import InfoModal from './components/InfoModal.vue';
+import ConfirmModal from './components/ConfirmModal.vue';
+import ToastNotification from './components/ToastNotification.vue';
+import RequestHistoryModal from './components/RequestHistoryModal.vue';
+import AdminPage from './components/AdminPage.vue';
+import AuthPage from './components/AuthPage.vue';
+import { MODELS, state, addToast, loadModels } from './services/config.js';
+import {
+  streamChat, sendChat, uploadImage, uploadFile,
+  fetchHistory, fetchChat, fetchProjects, fetchProjectChats,
+  searchHistory, deleteChat, renameChat as apiRenameChat,
+  createProject as apiCreateProject,
+  renameProject as apiRenameProject,
+  deleteProject as apiDeleteProject,
+  addChatToProject as apiAddChatToProject,
+  removeChatFromProject as apiRemoveChatFromProject,
+  autoNameChat, createShareLink, fetchCurrentUser,
+  fetchModels, modelSupportsImages,
+} from './services/api.js';
+
+// ── Refs ──────────────────────────────────────────
+const chatAreaRef = ref(null);
+const messageInputRef = ref(null);
+
+const isSettingsOpen = ref(false);
+const isShareLinkModalOpen = ref(false);
+const isMenuOpen = ref(false);
+const showHistoryModal = ref(false);
+const historyMessages = ref([]);
+const infoDocType = ref('');
+
+const touchStartX = ref(0);
+const touchStartY = ref(0);
+
+const confirmModal = ref({
+  isOpen: false,
+  title: '',
+  message: '',
+  confirmText: 'Удалить',
+  onConfirm: () => {}
+});
+
+function confirmAction(title, message, confirmText, callback) {
+  confirmModal.value = {
+    isOpen: true,
+    title,
+    message,
+    confirmText,
+    onConfirm: async () => {
+      confirmModal.value.isOpen = false;
+      if (callback) await callback();
+    }
+  };
+}
+
+const sharedToken = ref(null);
+const messageText = ref('');
+
+// ── UI State ──────────────────────────────────────
+const isAppLoaded = ref(false);
+const isAdminRoute = ref(false);
+const sidebarOpen = ref(window.innerWidth > 768);
+const isLight = ref(document.body.classList.contains('light-theme'));
+const focusMode = ref(false);
+const chatTitle = ref('Новый чат');
+
+function closeAdmin() {
+  window.location.href = '/';
+}
+
+watch(focusMode, (val) => {
+  if (val) {
+    document.body.classList.add('focus-mode');
+  } else {
+    document.body.classList.remove('focus-mode');
+  }
+});
+const historyChats = ref([]);
+const projects = ref([]);
+const projectChats = ref([]);
+const currentProject = ref(null);
+const streamingHtml = ref('');
+const currentUser = ref(null);
+
+// ── Computed ──────────────────────────────────────
+const focusBgUrl = computed(() => {
+  const bg = currentUser.value?.focus_bg;
+  if (!bg) return '';
+  if (bg.startsWith('http') || bg.startsWith('/')) return bg;
+  return '/' + bg;
+});
+const modelIndicatorColor = computed(() => MODELS[state.model]?.cls || '#4f8fff');
+const modelIndicatorText = computed(() => MODELS[state.model]?.indicatorText || state.model);
+
+// ── Helpers ───────────────────────────────────────
+function isVideo(url) {
+  if (!url) return false;
+  return url.match(/\.(mp4|webm|ogg)$/i) !== null;
+}
+
+async function reloadUser() {
+  try {
+    const user = await fetchCurrentUser();
+    if (user) {
+      currentUser.value = user;
+      if (user.def_search !== undefined) {
+        state.defaultSearchMode = user.def_search;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to reload user:', e);
+  }
+}
+
+function closeSettings() {
+  isSettingsOpen.value = false;
+  reloadUser();
+}
+
+// ── URL Routing ──────────────────────────────────
+function setUrl(uid) {
+  if (isAdminRoute.value) return;
+  try {
+    const url = uid ? `/chat/${uid}` : '/';
+    history.pushState({ chatId: uid }, '', url);
+  } catch (e) {
+    console.error('Url update failed', e);
+  }
+}
+
+function getChatIdFromUrl() {
+  const m = location.pathname.match(/\/chat\/([^/]+)/);
+  return m ? m[1] : null;
+}
+
+function getShareTokenFromUrl() {
+  const m = location.pathname.match(/\/share\/([^/]+)/);
+  return m ? m[1] : null;
+}
+
+// ── ID Generation ────────────────────────────────
+function generateId() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
+
+// ── Model Change ─────────────────────────────────
+function onModelChange(model) {
+  state.model = model;
+}
+
+// ── History ──────────────────────────────────────
+async function loadHistory() {
+  try {
+    const data = await fetchHistory();
+    historyChats.value = data.chats || [];
+  } catch (e) {
+    console.error('Failed to load history:', e);
+  }
+}
+
+async function loadProjects() {
+  try {
+    const data = await fetchProjects();
+    projects.value = data.projects || [];
+  } catch {}
+}
+
+function toggleTheme() {
+  isLight.value = document.body.classList.toggle('light-theme');
+  localStorage.setItem('nc_theme', isLight.value ? 'light' : 'dark');
+}
+
+// ── New Chat ─────────────────────────────────────
+function newChat(temp = false) {
+  state.chatId = generateId();
+  state.oldChatId = null;
+  state.messages = [];
+  state.isTemp = temp;
+  state.attachedFiles = [];
+  streamingHtml.value = '';
+  messageText.value = '';
+
+  chatTitle.value = temp ? '⊘ Временный чат' : 'Новый чат';
+  setUrl(null);
+  loadHistory();
+
+  if (window.innerWidth <= 768) sidebarOpen.value = false;
+  nextTick(() => messageInputRef.value?.focus());
+}
+
+// ── Load Chat ────────────────────────────────────
+async function onSelectChat(uid) {
+  try {
+    const data = await fetchChat(uid);
+    state.chatId = uid;
+    state.oldChatId = null;
+    state.messages = data.messages || [];
+    state.isTemp = false;
+    state.attachedFiles = [];
+    streamingHtml.value = '';
+    messageText.value = '';
+
+    const chatMeta = historyChats.value.find(c => c.uid === uid);
+    chatTitle.value = chatMeta?.title || 'Чат';
+    state.model = chatMeta?.model || 'rigel';
+    setUrl(uid);
+
+    if (window.innerWidth <= 768) sidebarOpen.value = false;
+    nextTick(() => {
+      chatAreaRef.value?.scrollToBottom(true);
+      messageInputRef.value?.focus();
+    });
+    await loadHistory();
+  } catch (e) {
+    console.error('Failed to load chat:', e);
+  }
+}
+
+// ── Delete Chat ──────────────────────────────────
+async function onDeleteChat(uid) {
+  confirmAction('Удаление чата', 'Вы уверены, что хотите удалить этот чат?', 'Удалить', async () => {
+    try {
+      await deleteChat(uid);
+      if (state.chatId === uid) newChat();
+      await loadHistory();
+    } catch (e) {
+      console.error('Failed to delete chat:', e);
+    }
+  });
+}
+
+// ── Projects ─────────────────────────────────────
+async function onSelectProject(proj) {
+  currentProject.value = proj;
+  try {
+    const data = await fetchProjectChats(proj.id);
+    projectChats.value = data.chats || [];
+  } catch {}
+}
+
