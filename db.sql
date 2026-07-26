@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Хост: localhost:3306
--- Время создания: Июл 24 2026 г., 18:03
+-- Время создания: Июл 26 2026 г., 11:45
 -- Версия сервера: 10.11.14-MariaDB-0+deb12u2
 -- Версия PHP: 8.2.30
 
@@ -57,6 +57,20 @@ CREATE TABLE `admin_notes_archive` (
   `id` int(11) NOT NULL,
   `content` text NOT NULL,
   `updated_at` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `admin_notifications`
+--
+
+CREATE TABLE `admin_notifications` (
+  `id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `message` text NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `created_at` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -342,6 +356,12 @@ ALTER TABLE `admin_notes_archive`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Индексы таблицы `admin_notifications`
+--
+ALTER TABLE `admin_notifications`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Индексы таблицы `chats`
 --
 ALTER TABLE `chats`
@@ -475,6 +495,12 @@ ALTER TABLE `admin_notes_app`
 -- AUTO_INCREMENT для таблицы `admin_notes_archive`
 --
 ALTER TABLE `admin_notes_archive`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT для таблицы `admin_notifications`
+--
+ALTER TABLE `admin_notifications`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --

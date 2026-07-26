@@ -27,6 +27,9 @@
 
       <!-- ДАШБОРД -->
       <div v-if="activeTab==='dashboard'" class="tab-content active">
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+          <button class="btn-sm" @click="testNotification" style="background: var(--accent); color: white;">🔔 Тест уведомления (5 сек)</button>
+        </div>
         <div class="stats-grid">
           <div class="stat-card accent"><div class="stat-value">{{ stats.total_users }}</div><div class="stat-label">Юзеров</div></div>
           <div class="stat-card green"><div class="stat-value">{{ stats.approved_users }}</div><div class="stat-label">Одобрено</div></div>
@@ -56,6 +59,20 @@
               <span class="uc">{{ m.count }}</span>
             </div>
             <div v-if="!activeModelsWeek.length" style="color:var(--text-3);font-size:12px">Нет данных</div>
+          </div>
+        </div>
+
+        <div class="usage-card" style="margin-top: 20px;">
+          <div class="usage-title">Рассылка уведомлений</div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+            <div style="display: flex; gap: 10px;">
+              <input type="text" v-model="notifyForm.title" placeholder="Заголовок (например, Технические работы)" style="flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-1);">
+              <input type="number" v-model="notifyForm.userId" placeholder="ID юзера (пусто = всем)" style="width: 180px; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-1);">
+            </div>
+            <textarea v-model="notifyForm.message" placeholder="Текст уведомления..." style="height: 60px; padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-1); resize: vertical;"></textarea>
+            <button class="btn-sm" @click="sendAdminNotification" style="background: var(--accent); color: white; align-self: flex-start; padding: 8px 16px;">
+              {{ isSendingNotification ? 'Отправка...' : 'Отправить уведомление' }}
+            </button>
           </div>
         </div>
       </div>
@@ -359,12 +376,18 @@ const loading = ref(true);
 const error = ref(null);
 const activeTab = ref('dashboard');
 
-const stats = ref({});
 const models = ref([]);
 const users = ref([]);
+const allNotes = ref([]);
+const docs = ref({});
+const newDoc = ref({ type: '', content: '' });
+
+const notifyForm = ref({ title: '', message: '', userId: '' });
+const isSendingNotification = ref(false);
+
+const stats = ref({});
 const notes = ref([]);
 const appNotes = ref([]);
-const docs = ref({});
 
 const ttsSettings = ref({});
 const ttsVoices = ref([]);
@@ -501,6 +524,57 @@ async function toggleModel(m) {
     if (res.ok) m.is_active = res.is_active;
   } catch(e) { console.error(e); }
 }
+
+const testNotification = () => {
+  console.log('Тест уведомления запущен...');
+  setTimeout(async () => {
+    if (window.electron) {
+      window.electron.sendNotification('NeuroChat Тест', 'Это тестовое уведомление из админки!');
+    } else {
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification('NeuroChat Тест', { body: 'Это тестовое уведомление из админки!' });
+        } else if (Notification.permission !== 'denied') {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            new Notification('NeuroChat Тест', { body: 'Это тестовое уведомление из админки!' });
+          }
+        }
+      }
+    }
+  }, 5000);
+};
+
+const sendAdminNotification = async () => {
+  if (!notifyForm.value.title.trim() || !notifyForm.value.message.trim()) {
+    alert('Заполните заголовок и сообщение');
+    return;
+  }
+  isSendingNotification.value = true;
+  try {
+    const res = await fetch('/api/admin_notify.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: notifyForm.value.title.trim(),
+        message: notifyForm.value.message.trim(),
+        user_id: notifyForm.value.userId ? parseInt(notifyForm.value.userId) : null
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      alert('Уведомление успешно отправлено!');
+      notifyForm.value.title = '';
+      notifyForm.value.message = '';
+      notifyForm.value.userId = '';
+    } else {
+      alert('Ошибка отправки: ' + data.error);
+    }
+  } catch (e) {
+    alert('Сетевая ошибка: ' + e.message);
+  }
+  isSendingNotification.value = false;
+};
 
 async function saveModel(m) {
   m._saving = true;

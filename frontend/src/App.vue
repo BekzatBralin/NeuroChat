@@ -166,6 +166,8 @@ import RequestHistoryModal from './components/RequestHistoryModal.vue';
 import AdminPage from './components/AdminPage.vue';
 import AuthPage from './components/AuthPage.vue';
 import { MODELS, state, addToast, loadModels } from './services/config.js';
+
+const isTauri = !!window.__TAURI_INTERNALS__;
 import {
   streamChat, sendChat, uploadImage, uploadFile,
   fetchHistory, fetchChat, fetchProjects, fetchProjectChats,
@@ -250,6 +252,8 @@ const projectChats = ref([]);
 const currentProject = ref(null);
 const streamingHtml = ref('');
 const currentUser = ref(null);
+
+
 
 // ── Computed ──────────────────────────────────────
 const focusBgUrl = computed(() => {
@@ -781,16 +785,18 @@ async function proceedSendMessage(text) {
       const streamResult = await handleStream(res);
       streamingHtml.value = '';
       state.messages.push({ role: 'assistant', content: streamResult.text, cacheType: streamResult.cacheType });
-
+      notifyIfHidden('NeuroChat', `Ответ от ${payload.model} готов!`);
     } else {
       const data = await sendChat(payload, abortController.signal);
       state.messages.push({ role: 'assistant', content: data.reply, cacheType: data.cache_type || null });
+      notifyIfHidden('NeuroChat', `Ответ от ${payload.model} готов!`);
     }
 
   } catch (e) {
     if (e.name !== 'AbortError') {
       streamingHtml.value = '';
       state.messages.push({ role: 'assistant', content: `❌ Ошибка: ${e.message}` });
+      notifyIfHidden('NeuroChat', 'Произошла ошибка при получении ответа');
     }
   } finally {
     abortController = null;
@@ -802,6 +808,41 @@ async function proceedSendMessage(text) {
         messageInputRef.value?.focus();
       }
     });
+  }
+}
+
+async function notifyIfHidden(title, body) {
+  if (window.electron) {
+    // Electron checks focus and visibility on the backend
+    window.electron.sendNotification(title, body);
+  } else if (document.visibilityState === 'hidden' || !document.hasFocus()) {
+    if (isTauri) {
+      try {
+        const { isPermissionGranted, requestPermission, sendNotification } = await import('@tauri-apps/plugin-notification');
+        let permissionGranted = await isPermissionGranted();
+        if (!permissionGranted) {
+          const permission = await requestPermission();
+          permissionGranted = permission === 'granted';
+        }
+        if (permissionGranted) {
+          sendNotification({ title, body });
+        }
+      } catch (e) {
+        console.error('Ошибка отправки уведомления Tauri:', e);
+      }
+    } else {
+      // Standard Web Notification API for Browser
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification(title, { body });
+        } else if (Notification.permission !== 'denied') {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            new Notification(title, { body });
+          }
+        }
+      }
+    }
   }
 }
 
@@ -957,6 +998,33 @@ function onTouchEnd(e) {
   }
 }
 
+// ── Admin Notifications Polling ─────────────────────
+let notificationPollInterval = null;
+const lastAdminNotificationId = ref(parseInt(localStorage.getItem('lastAdminNotificationId') || '0'));
+
+async function pollAdminNotifications() {
+  try {
+    const res = await fetch(`/api/admin_notify.php?last_id=${lastAdminNotificationId.value}`);
+    const data = await res.json();
+    if (data.ok && data.notifications && data.notifications.length > 0) {
+      for (const n of data.notifications) {
+        if (window.electron) {
+          window.electron.sendNotification(n.title, n.message);
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(n.title, { body: n.message });
+        }
+        const nid = parseInt(n.id);
+        if (nid > lastAdminNotificationId.value) {
+          lastAdminNotificationId.value = nid;
+          localStorage.setItem('lastAdminNotificationId', lastAdminNotificationId.value.toString());
+        }
+      }
+    }
+  } catch (e) {
+    // silently fail
+  }
+}
+
 // ── Init ─────────────────────────────────────────
 
 onMounted(async () => {
@@ -975,6 +1043,10 @@ onMounted(async () => {
     isAppLoaded.value = true;
     return;
   }
+
+  // Start polling for global/admin notifications
+  pollAdminNotifications();
+  notificationPollInterval = setInterval(pollAdminNotifications, 60000);
 
   const path = window.location.pathname;
   if (path.startsWith('/admin')) {
@@ -1028,6 +1100,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener('touchstart', onTouchStart);
   document.removeEventListener('touchend', onTouchEnd);
+  window.removeEventListener('keydown', handleGlobalKeydown);
+  if (notificationPollInterval) {
+    clearInterval(notificationPollInterval);
+  }
 });
 
 // Save draft on change
