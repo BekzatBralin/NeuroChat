@@ -150,6 +150,11 @@
 
 <script setup>
 import { ref, onMounted, nextTick, onBeforeUnmount, reactive, computed, watch } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { PushNotifications } from '@capacitor/push-notifications';
 import DOMPurify from 'dompurify';
 import { renderMarkdown, autoCloseMarkdown, formatMd } from './utils/markdown';
 import Sidebar from './components/Sidebar.vue';
@@ -816,7 +821,18 @@ async function notifyIfHidden(title, body) {
     // Electron checks focus and visibility on the backend
     window.electron.sendNotification(title, body);
   } else if (document.visibilityState === 'hidden' || !document.hasFocus()) {
-    if (isTauri) {
+    if (Capacitor.isNativePlatform()) {
+      LocalNotifications.schedule({
+        notifications: [
+          {
+            title: title,
+            body: body,
+            id: Math.floor(Math.random() * 1000000),
+            channelId: 'neurochat_main',
+          }
+        ]
+      });
+    } else if (isTauri) {
       try {
         const { isPermissionGranted, requestPermission, sendNotification } = await import('@tauri-apps/plugin-notification');
         let permissionGranted = await isPermissionGranted();
@@ -1000,23 +1016,26 @@ function onTouchEnd(e) {
 
 // ── Admin Notifications Polling ─────────────────────
 let notificationPollInterval = null;
-const lastAdminNotificationId = ref(parseInt(localStorage.getItem('lastAdminNotificationId') || '0'));
 
 async function pollAdminNotifications() {
   try {
-    const res = await fetch(`/api/admin_notify.php?last_id=${lastAdminNotificationId.value}`);
+    const res = await fetch('/api/admin_notify.php');
     const data = await res.json();
     if (data.ok && data.notifications && data.notifications.length > 0) {
       for (const n of data.notifications) {
         if (window.electron) {
           window.electron.sendNotification(n.title, n.message);
+        } else if (Capacitor.isNativePlatform()) {
+          LocalNotifications.schedule({
+            notifications: [{
+              title: n.title,
+              body: n.message,
+              id: Math.floor(Math.random() * 1000000),
+              channelId: 'neurochat_main',
+            }]
+          });
         } else if ('Notification' in window && Notification.permission === 'granted') {
           new Notification(n.title, { body: n.message });
-        }
-        const nid = parseInt(n.id);
-        if (nid > lastAdminNotificationId.value) {
-          lastAdminNotificationId.value = nid;
-          localStorage.setItem('lastAdminNotificationId', lastAdminNotificationId.value.toString());
         }
       }
     }
@@ -1025,10 +1044,83 @@ async function pollAdminNotifications() {
   }
 }
 
+// ── Telegram App Links: авторизация через перехваченный URL ─────────────────
+// Когда Android App Links перехватывает редирект от Telegram на наш домен,
+// запрос НЕ доходит до сервера — вместо этого открывается приложение.
+// Мы парсим URL, достаём данные Telegram и шлём их на API напрямую.
+async function tryMobileAuth(url) {
+  try {
+    alert('[DEBUG] tryMobileAuth called with: ' + url);
+    const parsed = new URL(url);
+
+    // Случай 1: URL содержит данные Telegram (перехвачен редирект от TG)
+    if (parsed.pathname.includes('tg_auth') && parsed.searchParams.get('id')) {
+      console.log('[AppLinks] Intercepted TG auth redirect, sending to API...');
+      const params = Object.fromEntries(parsed.searchParams.entries());
+      const res = await fetch('/api/tg_mobile_auth.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+      });
+      const data = await res.json();
+      if (data.ok) {
+        console.log('[AppLinks] Mobile auth success!');
+        return true;
+      }
+      console.warn('[AppLinks] Mobile auth failed:', data.error);
+      return false;
+    }
+
+    // Случай 2: URL содержит auth_token (для обратной совместимости)
+    const token = parsed.searchParams.get('auth_token');
+    if (token) {
+      console.log('[AppLinks] Exchanging auth_token...');
+      const res = await fetch('/api/exchange_token.php?token=' + encodeURIComponent(token));
+      const data = await res.json();
+      if (data.ok) {
+        console.log('[AppLinks] Token exchanged!');
+        if (data.session_id && data.session_name) {
+          document.cookie = `${data.session_name}=${data.session_id}; path=/; max-age=31536000`;
+        }
+        return true;
+      }
+      console.warn('[AppLinks] Token exchange failed:', data.error);
+      return false;
+    }
+
+    return false;
+  } catch (e) {
+    console.error('[AppLinks] tryMobileAuth error:', e);
+    return false;
+  }
+}
+
 // ── Init ─────────────────────────────────────────
 
 onMounted(async () => {
-  await loadModels();
+  // ── Обработка одноразового токена (Telegram App Links) ──────────────────────
+  // Если приложение открылось через App Link с ?auth_token=..., обмениваем его на сессию
+  let exchanged = false;
+  if (Capacitor.isNativePlatform()) {
+    const launchUrl = await App.getLaunchUrl();
+    alert('[DEBUG] getLaunchUrl: ' + JSON.stringify(launchUrl));
+    if (launchUrl?.url) {
+      exchanged = await tryMobileAuth(launchUrl.url);
+    }
+    if (!exchanged && window.location.search) {
+      exchanged = await tryMobileAuth(window.location.href);
+    }
+  }
+  
+  if (exchanged) {
+    window.history.replaceState({}, document.title, "/");
+  }
+
+  try {
+    await loadModels();
+  } catch (e) {
+    console.warn('Could not load models (maybe not logged in or pending approval)', e);
+  }
   // Load current user profile
   try {
     currentUser.value = await fetchCurrentUser();
@@ -1042,6 +1134,72 @@ onMounted(async () => {
   if (!currentUser.value || !currentUser.value.is_approved) {
     isAppLoaded.value = true;
     return;
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    await LocalNotifications.requestPermissions();
+    await LocalNotifications.createChannel({
+      id: 'neurochat_main',
+      name: 'NeuroChat',
+      description: 'Уведомления NeuroChat',
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+      sound: 'default',
+    });
+
+    // FCM Registration
+    let permStatus = await PushNotifications.checkPermissions();
+    if (permStatus.receive === 'prompt') {
+      permStatus = await PushNotifications.requestPermissions();
+    }
+    if (permStatus.receive !== 'granted') {
+      console.warn('Push notification permission denied');
+    } else {
+      await PushNotifications.register();
+      
+      PushNotifications.addListener('registration', (token) => {
+        fetch('/api/fcm_token.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token.value })
+        }).catch(console.error);
+      });
+      
+      PushNotifications.addListener('registrationError', (error) => {
+        console.error('Error on registration: ' + JSON.stringify(error));
+      });
+      
+      PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        // Show heads-up via LocalNotifications when in foreground
+        LocalNotifications.schedule({
+          notifications: [{
+            title: notification.title,
+            body: notification.body,
+            id: Math.floor(Math.random() * 1000000),
+            channelId: 'neurochat_main',
+          }]
+        });
+      });
+    }
+  }
+
+  // Handle deep links (App Links) for Android/iOS
+  // Android перехватывает ВСЕ ссылки на ai.bralin.kz, включая редиректы от Telegram.
+  // Мы парсим перехваченный URL и авторизуемся напрямую через API.
+  if (Capacitor.isNativePlatform()) {
+    App.addListener('appUrlOpen', async (event) => {
+      const url = event.url;
+      alert('[DEBUG] appUrlOpen fired! URL: ' + url);
+
+      if (url.includes('ai.bralin.kz') || url.startsWith('neurochat://')) {
+        const authed = await tryMobileAuth(url);
+        if (authed) {
+          try { await Browser.close(); } catch (e) {}
+          window.location.reload();
+        }
+      }
+    });
   }
 
   // Start polling for global/admin notifications

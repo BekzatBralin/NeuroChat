@@ -1,32 +1,38 @@
 <?php
-// В fcm_token.php после session_start()
 require_once __DIR__ . '/../settings.php';
+require_once PATHS['auth_guard'];
 require_once PATHS['db'];
 
-initSessionStorage();
-session_set_cookie_params(SESSION_LIFETIME);
-session_start();
-file_put_contents(__DIR__ . '/debug_fcm.log', date('Y-m-d H:i:s') . " - Ping\n", FILE_APPEND);
+header('Content-Type: application/json; charset=utf-8');
 
-header('Content-Type: application/json');
+$userId = (int)$currentUser['id'];
+$db = getDB();
 
-if (empty($_SESSION['user'])) {
-    echo json_encode(['ok' => false, 'error' => 'unauthorized']);
+// POST — регистрация FCM-токена устройства
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $token = trim($input['token'] ?? '');
+
+    if (!$token) {
+        echo json_encode(['ok' => false, 'error' => 'No token']);
+        exit;
+    }
+
+    $deviceHash = hash('sha256', $token);
+
+    try {
+        $stmt = $db->prepare(
+            'INSERT INTO fcm_tokens (user_id, token, device_hash, created_at)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE user_id = ?, token = ?, created_at = ?'
+        );
+        $now = time();
+        $stmt->execute([$userId, $token, $deviceHash, $now, $userId, $token, $now]);
+        echo json_encode(['ok' => true]);
+    } catch (\Exception $e) {
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    }
     exit;
 }
 
-$input = json_decode(file_get_contents('php://input'), true);
-$token = trim($input['token'] ?? '');
-
-if (!$token) {
-    echo json_encode(['ok' => false]);
-    exit;
-}
-
-getDB()->prepare('
-    INSERT INTO fcm_tokens (user_id, token, updated_at) 
-    VALUES (?, ?, ?) 
-    ON DUPLICATE KEY UPDATE token=VALUES(token), updated_at=VALUES(updated_at)
-')->execute([$_SESSION['user']['id'], $token, time()]);
-
-echo json_encode(['ok' => true]);
+echo json_encode(['ok' => false, 'error' => 'Invalid method']);

@@ -52,7 +52,7 @@
         </div>
         
         <div class="auth-providers">
-          <a href="/auth/auth.php?action=login" class="provider-btn google-btn">
+          <a href="#" @click.prevent="loginWithGoogle" class="provider-btn google-btn">
             <svg viewBox="0 0 24 24" width="20" height="20">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -62,13 +62,15 @@
             Продолжить с Google
           </a>
           
-          <div class="provider-divider">
-            <span>или</span>
-          </div>
-          
-          <div class="tg-wrapper" ref="tgWrapper">
-            <!-- Telegram widget will be injected here -->
-          </div>
+          <template v-if="!Capacitor.isNativePlatform()">
+            <div class="provider-divider">
+              <span>или</span>
+            </div>
+            
+            <div class="tg-wrapper" ref="tgWrapper">
+              <!-- Telegram widget will be injected here -->
+            </div>
+          </template>
         </div>
         
         <div class="auth-terms">
@@ -95,6 +97,9 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { renderMarkdown } from '../utils/markdown';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 const props = defineProps({
   user: Object
@@ -107,6 +112,45 @@ const showTermsModal = ref(false);
 const docContent = ref('');
 const termsTitle = ref('');
 const isLoadingDoc = ref(false);
+
+async function loginWithGoogle() {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await GoogleAuth.initialize({
+        clientId: '718251286879-tgh5i3tt44e5nl0gv1q508fvtajos9r5.apps.googleusercontent.com',
+        scopes: ['profile', 'email'],
+        grantOfflineAccess: true,
+      });
+      const user = await GoogleAuth.signIn();
+      if (user.authentication.idToken) {
+        const res = await fetch('/auth/auth.php?action=native_login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ id_token: user.authentication.idToken })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          window.location.reload();
+        } else {
+          alert('Ошибка авторизации: ' + data.error);
+        }
+      }
+    } catch (e) {
+      console.error('Google Auth Error:', e);
+    }
+  } else {
+    window.location.href = '/auth/auth.php?action=login';
+  }
+}
+
+async function loginWithTelegramNative() {
+  try {
+    await Browser.open({ url: 'https://ai.bralin.kz/auth/mobile_login.php' });
+  } catch (e) {
+    console.error('Browser open error:', e);
+  }
+}
+
 
 async function openTerms(type, title) {
   termsTitle.value = title;
@@ -150,7 +194,13 @@ onMounted(async () => {
         script.src = 'https://telegram.org/js/telegram-widget.js?22';
         script.setAttribute('data-telegram-login', tgBotName.value);
         script.setAttribute('data-size', 'large');
-        script.setAttribute('data-auth-url', window.location.origin + '/auth/tg_auth.php');
+        
+        let authUrl = window.location.origin + '/auth/tg_auth.php';
+        if (Capacitor.isNativePlatform()) {
+          authUrl += '?from_app=1';
+        }
+        script.setAttribute('data-auth-url', authUrl);
+        
         script.setAttribute('data-request-access', 'write');
         script.setAttribute('data-radius', '8');
         tgWrapper.value.appendChild(script);
@@ -339,6 +389,17 @@ h1 {
 
 .light-theme .google-btn:hover {
   background: #f8f9fa;
+}
+
+.tg-native-btn {
+  background: #0088cc;
+  color: white;
+  border: none;
+}
+
+.tg-native-btn:hover {
+  background: #0077b3;
+  transform: translateY(-2px);
 }
 
 .provider-divider {

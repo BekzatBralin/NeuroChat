@@ -4,7 +4,7 @@ require_once PATHS['db'];
 
 // Инициализируем сессии в БД вместо стандартной системы PHP
 initSessionStorage();
-session_set_cookie_params(SESSION_LIFETIME);
+
 session_start();
 
 $_SESSION['last_activity'] = time();

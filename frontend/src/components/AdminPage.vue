@@ -360,6 +360,9 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import RequestHistoryModal from './RequestHistoryModal.vue';
 import { fetchAdminData, postJSON } from '../services/api.js';
 
 async function adminAction(payload) {
@@ -530,6 +533,15 @@ const testNotification = () => {
   setTimeout(async () => {
     if (window.electron) {
       window.electron.sendNotification('NeuroChat Тест', 'Это тестовое уведомление из админки!');
+    } else if (Capacitor.isNativePlatform()) {
+      LocalNotifications.schedule({
+        notifications: [{
+          title: 'NeuroChat Тест',
+          body: 'Это тестовое уведомление из админки!',
+          id: Math.floor(Math.random() * 1000000),
+          channelId: 'neurochat_main',
+        }]
+      });
     } else {
       if ('Notification' in window) {
         if (Notification.permission === 'granted') {

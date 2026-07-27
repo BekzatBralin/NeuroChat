@@ -36,3 +36,6 @@ deploy.sh
 # Загруженные пользователями файлы (скрываем содержимое папки, но оставляем структуру)
 backend/files/*
 !backend/files/.gitkeep
+
+# Firebase & Service Accounts
+backend/*.json

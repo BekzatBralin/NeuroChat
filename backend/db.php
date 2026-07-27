@@ -835,6 +835,14 @@ class DbSessionHandler implements \SessionHandlerInterface {
 }
 
 function initSessionStorage(): void {
+    session_set_cookie_params([
+        'lifetime' => SESSION_LIFETIME,
+        'path' => '/',
+        'domain' => '',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
     session_set_save_handler(new DbSessionHandler(), true);
 }
 

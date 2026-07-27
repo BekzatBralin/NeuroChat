@@ -4,7 +4,7 @@ require_once PATHS['db'];
 
 // Инициализируем сессии в БД вместо стандартной системы PHP
 initSessionStorage();
-session_set_cookie_params(SESSION_LIFETIME);
+
 session_start();
 
 if (isset($_GET['pending']) && !empty($_SESSION['tg_pending'])) {
@@ -23,6 +23,42 @@ if ($action === 'logout') {
     $wasApp = !empty($_SESSION['is_app']) || isset($_COOKIE['nc_app']);
     session_destroy();
     header('Location: /' . ($wasApp ? '?app=mobile' : ''));
+    exit;
+}
+
+if ($action === 'native_login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    $id_token = $_POST['id_token'] ?? '';
+    if (!$id_token) {
+        echo json_encode(['ok' => false, 'error' => 'No token provided']);
+        exit;
+    }
+
+    $tokenInfoResp = @file_get_contents('https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($id_token));
+    if (!$tokenInfoResp) {
+        echo json_encode(['ok' => false, 'error' => 'Failed to verify token with Google']);
+        exit;
+    }
+    
+    $tokenInfo = json_decode($tokenInfoResp, true);
+
+    if (isset($tokenInfo['error']) || empty($tokenInfo['sub'])) {
+        echo json_encode(['ok' => false, 'error' => 'Invalid token']);
+        exit;
+    }
+
+    $googleUser = [
+        'id'      => $tokenInfo['sub'],
+        'email'   => $tokenInfo['email'] ?? '',
+        'name'    => $tokenInfo['name'] ?? '',
+        'picture' => $tokenInfo['picture'] ?? ''
+    ];
+
+    $user = upsertUser($googleUser);
+    $_SESSION['user'] = $user;
+    $_SESSION['is_app'] = true;
+
+    echo json_encode(['ok' => true]);
     exit;
 }
 
@@ -71,6 +107,7 @@ if ($action === 'callback' && isset($_GET['code'])) {
                 $user = upsertUser($profile);
                 $_SESSION['user'] = $user;
                 unset($_SESSION['oauth_state']);
+                session_write_close();
                 header('Location: /');
                 exit;
             }

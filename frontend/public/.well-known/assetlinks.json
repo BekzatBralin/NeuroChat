@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "kz.bralin.ai",
+    "sha256_cert_fingerprints": [
+      "94:EE:E6:F7:91:76:FF:A4:20:51:2E:70:A0:87:FE:6C:5C:16:61:7F:89:33:6F:B3:7C:8C:D8:EB:92:64:34:D2"
+    ]
+  }
+}]
