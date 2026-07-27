@@ -201,6 +201,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { MODELS, addToast } from '../services/config.js';
 import { uploadSTT } from '../services/api.js';
+import { Capacitor } from '@capacitor/core';
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 const props = defineProps({
   model: { type: String, default: 'rigel' },
@@ -389,59 +391,105 @@ let audioChunks = [];
 async function toggleRecording() {
   if (isRecording.value) {
     // Stop recording
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const result = await VoiceRecorder.stopRecording();
+        isRecording.value = false;
+        
+        if (result.value && result.value.recordDataBase64) {
+          const base64Response = await fetch(`data:${result.value.mimeType};base64,${result.value.recordDataBase64}`);
+          const blob = await base64Response.blob();
+          const ext = result.value.mimeType.includes('aac') ? 'aac' : 'm4a';
+          const file = new File([blob], `voice.${ext}`, { type: result.value.mimeType });
+          
+          try {
+            const res = await uploadSTT(file);
+            if (res.text) {
+              let current = messageText.value;
+              if (current && !current.endsWith(' ')) current += ' ';
+              messageText.value = current + res.text;
+              autoResize();
+            }
+          } catch (e) {
+            console.error('STT upload error:', e);
+            addToast('Ошибка распознавания голоса', 'error');
+          }
+        }
+      } catch (e) {
+        console.error('Failed to stop native recording:', e);
+        isRecording.value = false;
+      }
+    } else {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+      isRecording.value = false;
     }
-    isRecording.value = false;
   } else {
     // Start recording
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          noiseSuppression: true,
-          echoCancellation: true,
-          autoGainControl: true,
-          sampleRate: 44100,
-          channelCount: 1
-        }
-      });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunks.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
-        
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-        
-        try {
-          const res = await uploadSTT(file);
-          if (res.text) {
-            let current = messageText.value;
-            if (current && !current.endsWith(' ')) current += ' ';
-            messageText.value = current + res.text;
-            autoResize();
-            if (res.processing_time_sec) {
-              console.log(`STT Processing Time: ${res.processing_time_sec}s, Duration: ${res.audio_duration_sec}s`);
-            }
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const hasPermission = await VoiceRecorder.hasAudioRecordingPermission();
+        if (!hasPermission.value) {
+          const req = await VoiceRecorder.requestAudioRecordingPermission();
+          if (!req.value) {
+            addToast('Нет доступа к микрофону', 'error');
+            return;
           }
-        } catch (e) {
-          alert('Ошибка распознавания речи: ' + e.message);
         }
-      };
+        await VoiceRecorder.startRecording();
+        isRecording.value = true;
+      } catch (e) {
+        console.error('Native recording start failed:', e);
+        addToast('Ошибка запуска микрофона', 'error');
+      }
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            noiseSuppression: true,
+            echoCancellation: true,
+            autoGainControl: true,
+            sampleRate: 44100,
+            channelCount: 1
+          }
+        });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
 
-      mediaRecorder.start();
-      isRecording.value = true;
-    } catch (err) {
-      console.error('Error accessing microphone:', err);
-      alert('Нет доступа к микрофону или голосовой ввод не поддерживается.');
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
+          
+          // Stop all tracks
+          stream.getTracks().forEach(track => track.stop());
+          
+          try {
+            const res = await uploadSTT(file);
+            if (res.text) {
+              let current = messageText.value;
+              if (current && !current.endsWith(' ')) current += ' ';
+              messageText.value = current + res.text;
+              autoResize();
+            }
+          } catch (e) {
+            console.error('STT upload error:', e);
+            addToast('Ошибка распознавания голоса', 'error');
+          }
+        };
+
+        mediaRecorder.start();
+        isRecording.value = true;
+      } catch (err) {
+        console.error('Error accessing microphone:', err);
+        addToast('Микрофон недоступен', 'error');
+      }
     }
   }
 }

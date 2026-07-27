@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Хост: localhost:3306
--- Время создания: Июл 26 2026 г., 11:45
+-- Время создания: Июл 27 2026 г., 12:58
 -- Версия сервера: 10.11.14-MariaDB-0+deb12u2
 -- Версия PHP: 8.2.30
 
@@ -70,7 +70,21 @@ CREATE TABLE `admin_notifications` (
   `title` varchar(255) NOT NULL,
   `message` text NOT NULL,
   `user_id` int(11) DEFAULT NULL,
-  `created_at` int(11) NOT NULL
+  `created_at` int(11) NOT NULL,
+  `read_at` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `auth_tokens`
+--
+
+CREATE TABLE `auth_tokens` (
+  `token` varchar(64) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `expires` int(11) NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -113,9 +127,9 @@ CREATE TABLE `fcm_tokens` (
   `id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
   `token` text NOT NULL,
-  `created_at` int(11) DEFAULT unix_timestamp(),
-  `updated_at` int(11) DEFAULT unix_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `device_hash` varchar(64) NOT NULL,
+  `created_at` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
 
@@ -362,6 +376,12 @@ ALTER TABLE `admin_notifications`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Индексы таблицы `auth_tokens`
+--
+ALTER TABLE `auth_tokens`
+  ADD PRIMARY KEY (`token`);
+
+--
 -- Индексы таблицы `chats`
 --
 ALTER TABLE `chats`
@@ -381,7 +401,7 @@ ALTER TABLE `chat_projects`
 --
 ALTER TABLE `fcm_tokens`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `unique_user` (`user_id`);
+  ADD UNIQUE KEY `unique_device` (`device_hash`);
 
 --
 -- Индексы таблицы `info_docs`

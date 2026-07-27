@@ -9,7 +9,13 @@ NeuroChat is an AI-powered conversational web application.
 
 ## Installation & Setup
 
-1. **Clone the repository:**
+1. **System Dependencies:**
+   Install `ffmpeg` for audio conversion (e.g. converting AAC to WebM for STT on mobile devices):
+   ```bash
+   apt-get update && apt-get install -y ffmpeg
+   ```
+
+2. **Clone the repository:**
    Clone the repository to your server or local environment.
 
 2. **Database Setup:**

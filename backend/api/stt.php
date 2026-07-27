@@ -25,7 +25,28 @@ if ($file['error'] !== UPLOAD_ERR_OK) {
     exit;
 }
 
-$cfile = new CURLFile($file['tmp_name'], $file['type'], $file['name']);
+$tmpFilePath = $file['tmp_name'];
+$fileName = $file['name'];
+$fileType = $file['type'];
+
+// If the file is m4a or aac (which the mobile app produces), transcode to webm
+$ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+if ($ext === 'm4a' || $ext === 'aac' || strpos($fileType, 'm4a') !== false || strpos($fileType, 'aac') !== false) {
+    $newTmpFile = tempnam(sys_get_temp_dir(), 'stt_') . '.webm';
+    $cmd = 'ffmpeg -y -i ' . escapeshellarg($tmpFilePath) . ' -c:a libopus -b:a 32k ' . escapeshellarg($newTmpFile) . ' 2>&1';
+    exec($cmd, $output, $returnVar);
+    
+    if ($returnVar === 0 && file_exists($newTmpFile)) {
+        $tmpFilePath = $newTmpFile;
+        $fileName = 'voice.webm';
+        $fileType = 'audio/webm';
+    } else {
+        // If ffmpeg fails, fallback to original, though it will likely fail on API side
+        error_log("ffmpeg transcoding failed: " . implode("\n", $output));
+    }
+}
+
+$cfile = new CURLFile($tmpFilePath, $fileType, $fileName);
 $postData = [
     'file' => $cfile,
     'language' => 'ru', // Передаем подсказку для гейтвея/Groq, чтобы избежать галлюцинаций
