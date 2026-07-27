@@ -1050,7 +1050,7 @@ async function pollAdminNotifications() {
 // Мы парсим URL, достаём данные Telegram и шлём их на API напрямую.
 async function tryMobileAuth(url) {
   try {
-    alert('[DEBUG] tryMobileAuth called with: ' + url);
+
     const parsed = new URL(url);
 
     // Случай 1: URL содержит данные Telegram (перехвачен редирект от TG)
@@ -1103,7 +1103,7 @@ onMounted(async () => {
   let exchanged = false;
   if (Capacitor.isNativePlatform()) {
     const launchUrl = await App.getLaunchUrl();
-    alert('[DEBUG] getLaunchUrl: ' + JSON.stringify(launchUrl));
+
     if (launchUrl?.url) {
       exchanged = await tryMobileAuth(launchUrl.url);
     }
@@ -1190,7 +1190,7 @@ onMounted(async () => {
   if (Capacitor.isNativePlatform()) {
     App.addListener('appUrlOpen', async (event) => {
       const url = event.url;
-      alert('[DEBUG] appUrlOpen fired! URL: ' + url);
+
 
       if (url.includes('ai.bralin.kz') || url.startsWith('neurochat://')) {
         const authed = await tryMobileAuth(url);
