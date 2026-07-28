@@ -113,7 +113,7 @@
                 </div>
               </div>
               <div class="frow">
-                <div class="f"><label>Лимит</label><input type="number" v-model.number="m.daily_limit" min="0"></div>
+                <div class="f"><label>Энергия (База)</label><input type="number" v-model.number="m.base_energy" min="0"></div>
                 <div class="f"><label>$/M in</label><input type="number" v-model.number="m.price_input" step="0.0001" min="0"></div>
                 <div class="f"><label>$/M out</label><input type="number" v-model.number="m.price_output" step="0.0001" min="0"></div>
                 <div class="f"><label>Sort</label><input type="number" v-model.number="m.sort_order"></div>
@@ -327,7 +327,7 @@
                   <span style="font-family:var(--mono); font-size:12px; color:var(--text-2);">{{ newModel.color_class }}</span>
                 </div>
               </div>
-              <div class="f"><label>Дневной Лимит</label><input type="number" v-model.number="newModel.daily_limit" min="0"></div>
+              <div class="f"><label>Энергия (База)</label><input type="number" v-model.number="newModel.base_energy" min="0"></div>
             </div>
           </div>
 
@@ -430,7 +430,7 @@ const showAddModel = ref(false);
 const hubModels = ref([]);
 const isSyncing = ref(false);
 const newModel = ref({
-  key_name: '', display_name: '', backend_model: '', description: '', color_class: '#6366f1', daily_limit: 0
+  key_name: '', display_name: '', backend_model: '', description: '', color_class: '#6366f1', base_energy: 1
 });
 
 const deleteConfirm = ref({ show: false, model: null });
@@ -596,7 +596,7 @@ async function saveModel(m) {
       key_name: m.key_name,
       display_name: m.display_name,
       backend_model: m.backend_model,
-      daily_limit: m.daily_limit,
+      base_energy: m.base_energy,
       price_input: m.price_input,
       price_output: m.price_output,
       sort_order: m.sort_order,
@@ -613,7 +613,7 @@ async function saveModel(m) {
 }
 
 function openAddModel() {
-  newModel.value = { key_name: '', display_name: '', backend_model: '', description: '', color_class: '#6366f1', daily_limit: 0 };
+  newModel.value = { key_name: '', display_name: '', backend_model: '', description: '', color_class: '#6366f1', base_energy: 1 };
   showAddModel.value = true;
   if (!hubModels.value.length) syncHubModels();
 }

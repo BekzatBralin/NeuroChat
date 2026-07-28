@@ -239,6 +239,12 @@
         <div class="user-info">
           <div class="user-name">{{ currentUser?.nickname || currentUser?.name || 'Пользователь' }}</div>
           <div class="user-email" v-if="currentUser?.email">{{ currentUser.email }}</div>
+          <div class="user-energy" v-if="currentUser?.max_energy" style="font-size: 11px; color: var(--text-3); margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+            </svg>
+            {{ currentUser.energy }} / {{ currentUser.max_energy }}
+          </div>
         </div>
       </div>
       <button @click="$emit('open-settings')" class="btn-settings" title="Настройки аккаунта">

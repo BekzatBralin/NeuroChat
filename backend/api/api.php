@@ -28,8 +28,8 @@ if (empty($messages)) { echo json_encode(['error' => 'Нет сообщений'
 // Удаляем старый чат если это редактирование
 if ($oldChatId) deleteChat($oldChatId, $userId);
 
-// Проверка лимитов
-$stmt = getDB()->prepare('SELECT backend_model, daily_limit FROM models WHERE key_name = ? AND is_active = 1');
+// Проверка энергии
+$stmt = getDB()->prepare('SELECT backend_model, base_energy, price_input, price_output FROM models WHERE key_name = ? AND is_active = 1');
 $stmt->execute([$modelKey]);
 $dbModel = $stmt->fetch();
 
@@ -38,9 +38,11 @@ if (!$dbModel) {
     exit;
 }
 
-$limit = (int)$dbModel['daily_limit'];
-if ($limit > 0 && usageToday($userId, $modelKey) >= $limit) {
-    echo json_encode(['error' => "Дневной лимит ({$limit} сообщений). Попробуй завтра или выбери другую модель."]);
+$baseEnergy = (int)$dbModel['base_energy'];
+$userEnergy = (int)($currentUser['energy'] ?? 0);
+
+if ($baseEnergy > 0 && $userEnergy < $baseEnergy && $currentUser['role'] !== 'admin') {
+    echo json_encode(['error' => "Недостаточно энергии. Требуется {$baseEnergy}⚡, у вас {$userEnergy}⚡."]);
     exit;
 }
 
@@ -147,6 +149,18 @@ if ($chatUid && !$isTemp && isset($data['reply'])) {
     $isCached = !empty($data['cache_type']) ? 1 : 0;
     saveMessage($chatUid, $userId, 'assistant', $data['reply'], null, $isCached);
 }
-logUsage($userId, $modelKey, $data['usage']['input'] ?? 0, $data['usage']['output'] ?? 0);
+// Списываем энергию
+$inTokens = $data['usage']['input'] ?? 0;
+$outTokens = $data['usage']['output'] ?? 0;
+$costEnergy = 0;
+if ($baseEnergy > 0) {
+    $costEnergy = $baseEnergy;
+    if ($inTokens > 0 || $outTokens > 0) {
+        $priceIn = (float)($dbModel['price_input'] ?? 0);
+        $priceOut = (float)($dbModel['price_output'] ?? 0);
+        $costEnergy += (int)ceil((($inTokens / 1000000) * $priceIn * 1000) + (($outTokens / 1000000) * $priceOut * 1000));
+    }
+}
+logUsage($userId, $modelKey, $inTokens, $outTokens, $costEnergy);
 
 echo $response;

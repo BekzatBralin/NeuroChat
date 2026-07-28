@@ -42,14 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $k = trim($input['key_name'] ?? '');
         if ($k) {
             getDB()->prepare(
-                'INSERT IGNORE INTO models (key_name, display_name, backend_model, color_class, daily_limit, created_at, updated_at) 
+                'INSERT IGNORE INTO models (key_name, display_name, backend_model, color_class, base_energy, created_at, updated_at) 
                  VALUES (?, ?, ?, ?, ?, ?, ?)'
             )->execute([
                 $k,
                 $input['display_name'] ?? $k,
-                $input['backend_model'] ?? $k,
+                $input['backend_model'] ?? 'gpt-4o',
                 $input['color_class'] ?? 'rigel',
-                (int)($input['daily_limit'] ?? 0),
+                (int)($input['base_energy'] ?? 1),
                 time(), time()
             ]);
         }
@@ -68,14 +68,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $k = $input['key_name'] ?? '';
         if ($k) {
             getDB()->prepare(
-                'UPDATE models SET display_name=?, backend_model=?, color_class=?, daily_limit=?,
+                'UPDATE models SET display_name=?, backend_model=?, color_class=?, base_energy=?,
                  price_input=?, price_output=?, sort_order=?, description=?, updated_at=?
                  WHERE key_name=?'
             )->execute([
                 $input['display_name']  ?? '',
                 $input['backend_model'] ?? $k,
                 $input['color_class']   ?? 'rigel',
-                (int)($input['daily_limit']    ?? 0),
+                (int)($input['base_energy']    ?? 1),
                 (float)($input['price_input']  ?? 0),
                 (float)($input['price_output'] ?? 0),
                 (int)($input['sort_order']     ?? 0),
@@ -128,12 +128,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($input['user_action'])) {
         $action = $input['user_action'];
         $uid = (int)($input['user_id'] ?? 0);
+        
+        if ($uid === 1 && in_array($action, ['revoke', 'make_user', 'make_guest'])) {
+            http_response_code(403);
+            echo json_encode(['ok'=>false, 'error'=>'Создателя нельзя ограничить или лишить админки']);
+            exit;
+        }
+
         if ($uid) {
             match($action) {
                 'approve'    => getDB()->prepare('UPDATE users SET is_approved=1 WHERE id=?')->execute([$uid]),
                 'revoke'     => getDB()->prepare('UPDATE users SET is_approved=0 WHERE id=?')->execute([$uid]),
                 'make_admin' => getDB()->prepare('UPDATE users SET role="admin" WHERE id=?')->execute([$uid]),
+                'make_pro'   => getDB()->prepare('UPDATE users SET role="pro"  WHERE id=?')->execute([$uid]),
                 'make_user'  => getDB()->prepare('UPDATE users SET role="user"  WHERE id=?')->execute([$uid]),
+                'make_guest' => getDB()->prepare('UPDATE users SET role="guest"  WHERE id=?')->execute([$uid]),
                 default      => null,
             };
             echo json_encode(['ok'=>true]); exit;

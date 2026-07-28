@@ -239,6 +239,8 @@ echo json_encode([
         'focus_bg' => $currentUser['focus_bg'] ?? '',
         'push_enabled' => $currentUser['push_enabled'] ?? 1,
         'notifications' => $currentUser['notifications'] ?? 1,
+        'energy' => (int)($currentUser['energy'] ?? 0),
+        'max_energy' => $currentUser['role'] === 'admin' ? 999999 : ($currentUser['role'] === 'pro' ? 1000 : ($currentUser['role'] === 'user' ? 100 : 10)),
         'telegram_id' => $telegramId,
         'def_search' => $defSearch,
         'cache' => $useCache

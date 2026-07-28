@@ -840,10 +840,12 @@ async function proceedSendMessage(text) {
       streamingHtml.value = '';
       state.messages.push({ role: 'assistant', content: streamResult.text, cacheType: streamResult.cacheType });
       notifyIfHidden('NeuroChat', `Ответ от ${payload.model} готов!`);
+      await reloadUser();
     } else {
       const data = await sendChat(payload, abortController.signal);
       state.messages.push({ role: 'assistant', content: data.reply, cacheType: data.cache_type || null });
       notifyIfHidden('NeuroChat', `Ответ от ${payload.model} готов!`);
+      await reloadUser();
     }
 
   } catch (e) {
@@ -1140,8 +1142,12 @@ onMounted(async () => {
   // Capture JWT token from web URL
   const urlParams = new URLSearchParams(window.location.search);
   const webToken = urlParams.get('token');
+  const webError = urlParams.get('error');
   if (webToken) {
     localStorage.setItem('nc_token', webToken);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } else if (webError) {
+    addToast('Ошибка авторизации: ' + webError, 'error');
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
@@ -1157,17 +1163,11 @@ onMounted(async () => {
       exchanged = await tryMobileAuth(window.location.href);
     }
   }
-  
   if (exchanged) {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
-  try {
-    await loadModels();
-  } catch (e) {
-    console.warn('Could not load models (maybe not logged in or pending approval)', e);
-  }
-  // Load current user profile
+  // Load current user profile first
   try {
     currentUser.value = await fetchCurrentUser();
     globalBgEnabled.value = localStorage.getItem('globalBg') === '1';
@@ -1180,10 +1180,16 @@ onMounted(async () => {
     }
   } catch {}
 
-  if (!currentUser.value || !currentUser.value.is_approved) {
-    isAppLoaded.value = true;
-    return;
-  }
+    if (!currentUser.value || !currentUser.value.is_approved) {
+      isAppLoaded.value = true;
+      return;
+    }
+
+    try {
+      await loadModels();
+    } catch (e) {
+      console.warn('Could not load models', e);
+    }
 
   if (Capacitor.isNativePlatform()) {
     await LocalNotifications.requestPermissions();

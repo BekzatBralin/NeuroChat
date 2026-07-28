@@ -33,6 +33,8 @@ echo json_encode([
     'def_search'   => (int)($currentUser['def_search'] ?? 3),
     'cache'        => (int)($currentUser['cache'] ?? 1),
     'notifications' => (int)($currentUser['notifications'] ?? 1),
+    'energy'       => (int)($currentUser['energy'] ?? 0),
+    'max_energy'   => $currentUser['role'] === 'admin' ? 999999 : ($currentUser['role'] === 'pro' ? 1000 : ($currentUser['role'] === 'user' ? 100 : 10)),
     'tts_settings' => empty($ttsSettings) ? new stdClass() : $ttsSettings,
     'channel_link' => env('CHANNEL_LINK', 'https://t.me/neurochat_news'),
     'support_link' => env('SUPPORT_LINK', 'https://t.me/neurochat_support'),

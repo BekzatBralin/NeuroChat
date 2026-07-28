@@ -379,7 +379,7 @@ function upsertUser(array $google): array {
         $user['name']   = $google['name'];
         $user['original_avatar'] = $google['picture'];
     } else {
-        $db->prepare('INSERT INTO users (google_id, email, name, avatar, original_avatar) VALUES (?, ?, ?, ?, ?)')
+        $db->prepare('INSERT INTO users (google_id, email, name, avatar, original_avatar, created_at, last_login) VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())')
            ->execute([$google['id'], $google['email'], $google['name'], $google['picture'], $google['picture']]);
         $stmt->execute([$google['id']]);
         $user = $stmt->fetch();
@@ -390,7 +390,37 @@ function upsertUser(array $google): array {
 function getUserById(int $id): ?array {
     $stmt = getDB()->prepare('SELECT * FROM users WHERE id = ?');
     $stmt->execute([$id]);
-    return $stmt->fetch() ?: null;
+    $user = $stmt->fetch() ?: null;
+    
+    if ($user) {
+        $today = date('Y-m-d');
+        
+        // 1. Auto-promote guest to user if > 24h
+        if ($user['role'] === 'guest' && !empty($user['created_at'])) {
+            $created_at = is_numeric($user['created_at']) ? (int)$user['created_at'] : strtotime($user['created_at']);
+            if ($created_at > 0 && (time() - $created_at > 86400)) { // 24 hours
+                $user['role'] = 'user';
+                getDB()->prepare("UPDATE users SET role = 'user' WHERE id = ?")->execute([$id]);
+            }
+        }
+        
+        // 2. Refill energy if needed
+        $last_refill = $user['last_energy_refill'] ?? null;
+        if ($last_refill !== $today) {
+            $max_energy = 100; // default for user
+            if ($user['role'] === 'guest') $max_energy = 10;
+            if ($user['role'] === 'pro') $max_energy = 1000;
+            if ($user['role'] === 'admin') $max_energy = 999999;
+            
+            $user['energy'] = $max_energy;
+            $user['last_energy_refill'] = $today;
+            
+            getDB()->prepare("UPDATE users SET energy = ?, last_energy_refill = ? WHERE id = ?")
+                   ->execute([$max_energy, $today, $id]);
+        }
+    }
+    
+    return $user;
 }
 
 function updateUserProfile(int $id, string $nickname, ?string $avatarUrl): void {
@@ -473,10 +503,17 @@ function usageToday(int $userId, string $model): int {
     return (int) $stmt->fetchColumn();
 }
 
-function logUsage(int $userId, string $model, int $inputTokens = 0, int $outputTokens = 0): void {
+function logUsage(int $userId, string $model, int $inputTokens = 0, int $outputTokens = 0, int $costEnergy = 0): void {
     getDB()
         ->prepare('INSERT INTO usage_log (user_id, model, input_tokens, output_tokens, ts) VALUES (?, ?, ?, ?, UNIX_TIMESTAMP())')
         ->execute([$userId, $model, $inputTokens, $outputTokens]);
+        
+    if ($costEnergy > 0) {
+        $user = getUserById($userId);
+        if ($user && $user['role'] !== 'admin') {
+            getDB()->prepare('UPDATE users SET energy = GREATEST(0, energy - ?) WHERE id = ?')->execute([$costEnergy, $userId]);
+        }
+    }
 }
 
 // ── CHATS ─────────────────────────────────────────────────────────────────────

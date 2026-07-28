@@ -756,6 +756,7 @@ onMounted(() => {
 const showLogoutConfirm = ref(false);
 
 function doLogout() {
+  localStorage.removeItem('nc_token');
   window.location.href = '/auth/auth.php?action=logout';
 }
 </script>

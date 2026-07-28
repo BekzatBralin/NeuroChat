@@ -28,9 +28,9 @@ window.fetch = async function(input, init) {
     
     const res = await originalFetch(input, init);
     
-    // Handle global 401 (Unauthorized)
+    // Handle global 401 (Unauthorized) / 403
     if (res.status === 401 || res.status === 403) {
-        if (urlStr && urlStr.includes('/api/') && !urlStr.includes('/api/user.php') && !urlStr.includes('/api/info.php')) {
+        if (urlStr && urlStr.includes('/api/') && !urlStr.includes('/api/user.php') && !urlStr.includes('/api/info.php') && !urlStr.includes('/api/models.php')) {
             // Token expired or invalid, let's clear it and reload
             if (localStorage.getItem('nc_token')) {
                 localStorage.removeItem('nc_token');

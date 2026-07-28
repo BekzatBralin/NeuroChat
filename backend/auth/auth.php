@@ -23,6 +23,17 @@ if (isset($_GET['token']) && $action !== 'logout') {
 if ($action === 'logout') {
     $wasApp = !empty($_SESSION['is_app']) || isset($_COOKIE['nc_app']);
     session_destroy();
+    
+    // Очищаем куки
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+    setcookie('nc_session', '', time() - 3600, '/');
+    
     header('Location: /' . ($wasApp ? '?app=mobile' : ''));
     exit;
 }
@@ -79,9 +90,13 @@ if ($action === 'login') {
 $error   = null;
 if (!isset($pending)) $pending = false;
 
+if (isset($_GET['error']) && !isset($_GET['code']) && $action !== 'page') {
+    $error = 'Ошибка от Google: ' . htmlspecialchars($_GET['error']);
+}
+
 if ($action === 'callback' && isset($_GET['code'])) {
     if (!isset($_GET['state']) || $_GET['state'] !== ($_SESSION['oauth_state'] ?? '')) {
-        $error = 'Ошибка безопасности. Попробуй ещё раз.';
+        $error = 'Ошибка безопасности: state mismatch. (Получено: ' . ($_GET['state'] ?? 'null') . ', Ожидалось: ' . ($_SESSION['oauth_state'] ?? 'null') . ')';
     } else {
         $tokenResp = httpPost('https://oauth2.googleapis.com/token', [
             'code'          => $_GET['code'],
@@ -93,7 +108,7 @@ if ($action === 'callback' && isset($_GET['code'])) {
         $token = json_decode($tokenResp, true);
 
         if (empty($token['access_token'])) {
-            $error = 'Не удалось получить токен от Google.';
+            $error = 'Google не выдал access_token. Ответ: ' . $tokenResp;
         } else {
             $profileResp = httpGet(
                 'https://www.googleapis.com/oauth2/v2/userinfo',
@@ -102,14 +117,31 @@ if ($action === 'callback' && isset($_GET['code'])) {
             $profile = json_decode($profileResp, true);
 
             if (empty($profile['id'])) {
-                $error = 'Не удалось получить профиль от Google.';
+                $error = 'Google не выдал ID профиля. Ответ: ' . $profileResp;
             } else {
-                $user = upsertUser($profile);
-                $jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
-                unset($_SESSION['oauth_state']);
-                session_write_close();
-                header('Location: /?token=' . $jwtToken);
-                exit;
+                try {
+                    $user = upsertUser($profile);
+                    if (!$user || empty($user['id'])) {
+                        $error = 'upsertUser вернул пустого пользователя!';
+                    } else {
+                        $jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
+                        
+                        // Уничтожаем временную сессию OAuth
+                        session_destroy();
+                        if (ini_get("session.use_cookies")) {
+                            $params = session_get_cookie_params();
+                            setcookie(session_name(), '', time() - 42000,
+                                $params["path"], $params["domain"],
+                                $params["secure"], $params["httponly"]
+                            );
+                        }
+                        
+                        header('Location: /?token=' . $jwtToken);
+                        exit;
+                    }
+                } catch (\Throwable $e) {
+                    $error = 'Fatal DB Error в upsertUser: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
+                }
             }
         }
     }
@@ -148,5 +180,13 @@ if (isset($_GET['app']) && $_GET['app'] === 'mobile') {
 }
 $isApp = !empty($_SESSION['is_app']) || isset($_COOKIE['nc_app']);
 
-header('Location: /');
+$redirectUrl = '/';
+if ($error) {
+    file_put_contents(__DIR__ . '/google_error_log.txt', date('Y-m-d H:i:s') . " - Auth Error: " . $error . PHP_EOL, FILE_APPEND);
+    $redirectUrl .= '?error=' . urlencode($error);
+} elseif ($wasApp ?? false) {
+    $redirectUrl .= '?app=mobile';
+}
+file_put_contents(__DIR__ . '/google_error_log.txt', date('Y-m-d H:i:s') . " - Redirecting to: " . $redirectUrl . PHP_EOL, FILE_APPEND);
+header('Location: ' . $redirectUrl);
 exit;
