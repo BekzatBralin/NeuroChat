@@ -17,7 +17,8 @@ try {
             'focus_bg' => $currentUser['focus_bg'],
             'accent_color' => $currentUser['accent_color'],
             'def_search' => $currentUser['def_search'] ?? 3,
-            'cache' => $currentUser['cache'] ?? 1
+            'cache' => $currentUser['cache'] ?? 1,
+            'notifications' => $currentUser['notifications'] ?? 1
         ],
         'variables' => [],
         'modes' => [],

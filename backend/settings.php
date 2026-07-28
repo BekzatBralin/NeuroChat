@@ -22,6 +22,8 @@ function env(string $key, mixed $default = null): mixed {
     return $val !== false ? $val : $default;
 }
 
+define('JWT_SECRET', env('JWT_SECRET', 'neurochat_super_secret_fallback_key_2026'));
+
 define('BANNER_SHOW',  true);
 define('BANNER_TITLE', 'NeuroChat 3.0');
 define('BANNER_ID',    'v3.0');

@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['db'];
+require_once __DIR__ . '/jwt.php';
 
 $logFile = __DIR__ . '/tg_auth_debug.log';
 $logMsg = function($msg) use ($logFile) {
@@ -17,14 +18,10 @@ session_start();
 // Если запрос идёт из мобильного приложения, нам нужен токен для WebView.
 function redirectAppWithToken($user) {
     global $logMsg;
-    $token = bin2hex(random_bytes(32));
-    $expires = time() + 120;
-    $db = getDB();
-    $db->prepare('INSERT INTO auth_tokens (token, user_id, expires) VALUES (?, ?, ?)')
-       ->execute([$token, $user['id'], $expires]);
-    $logMsg("TOKEN CREATED: $token for user {$user['id']}");
-    $logMsg("REDIRECT TO: neurochat://auth?auth_token=$token");
-    header('Location: neurochat://auth?auth_token=' . $token);
+    $jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
+    $logMsg("TOKEN CREATED: $jwtToken for user {$user['id']}");
+    $logMsg("REDIRECT TO: neurochat://auth?token=$jwtToken");
+    header('Location: neurochat://auth?token=' . $jwtToken);
     exit;
 }
 
@@ -87,9 +84,9 @@ if (!empty($_GET['from_app'])) {
     redirectAppWithToken($user);
 }
 
-// Для веб-версии — стандартная сессия
-$logMsg("Web flow: setting session and redirecting to /");
-$_SESSION['user'] = $user;
+// Для веб-версии
+$logMsg("Web flow: generating JWT and redirecting to /");
+$jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
 session_write_close();
-header('Location: /');
+header('Location: /?token=' . $jwtToken);
 exit;

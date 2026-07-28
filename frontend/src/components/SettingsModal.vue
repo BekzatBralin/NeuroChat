@@ -86,9 +86,9 @@
         </div>
         -->
 
-        <!-- Оформление -->
+        <!-- Основное -->
         <div class="section">
-          <div class="section-title">Оформление</div>
+          <div class="section-title">Основное</div>
 
           <div>
             <label class="form-label">Алгоритм поиска по умолчанию</label>
@@ -97,6 +97,13 @@
               <option value="2">Умный (Эмбеддинги)</option>
               <option value="3">Глубокий (Deep Search) - Рекомендуется</option>
             </select>
+
+            <label class="toggle-switch-wrapper" style="margin-bottom: 16px;">
+              <div class="toggle-switch" :class="{ 'on': formData.notifications === 0 }" @click="toggleNotifications">
+                <div class="toggle-slider"></div>
+              </div>
+              <span class="toggle-label">Отключить уведомления</span>
+            </label>
 
             <label class="toggle-switch-wrapper" style="margin-bottom: 8px;">
               <div class="toggle-switch" :class="{ 'on': useCache }" @click="useCache = !useCache; saveUseCache()">
@@ -413,6 +420,7 @@ const csrfToken = ref('');
 
 const formData = ref({
   nickname: '',
+  notifications: 1,
   focus_bg_url: ''
 });
 
@@ -469,6 +477,7 @@ async function loadData(isBackground = false) {
       csrfToken.value = result.csrf_token;
       
       formData.value.nickname = user.value.nickname || '';
+      formData.value.notifications = user.value.notifications !== undefined ? user.value.notifications : 1;
       formData.value.focus_bg_url = user.value.focus_bg;
       defaultSearchMode.value = user.value.def_search ?? 3;
       useCache.value = user.value.cache !== undefined ? !!user.value.cache : true;
@@ -477,9 +486,19 @@ async function loadData(isBackground = false) {
     if (!isBackground) showMsg('error', 'Ошибка загрузки данных');
   }
   if (!isBackground) isLoading.value = false;
-}
+  }
 
-async function saveNickname() {
+  async function toggleNotifications() {
+    try {
+      formData.value.notifications = formData.value.notifications ? 0 : 1;
+      await apiCall({ action: 'toggle_notifications', notifications: formData.value.notifications });
+      emit('user-updated');
+    } catch (e) {
+      formData.value.notifications = formData.value.notifications ? 0 : 1;
+    }
+  }
+
+  async function saveNickname() {
   const res = await apiCall({ action: 'nickname', nickname: formData.value.nickname });
   if (res) emit('user-updated');
 }

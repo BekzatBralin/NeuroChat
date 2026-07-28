@@ -1,33 +1,50 @@
 <?php
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['db'];
+require_once __DIR__ . '/jwt.php';
 
-// Инициализируем сессии в БД вместо стандартной системы PHP
-initSessionStorage();
-
-session_start();
-
-$_SESSION['last_activity'] = time();
-
-// Запоминаем тип клиента через куки (переживает выход из аккаунта)
-if (isset($_GET['app_type']) || isset($_GET['app'])) {
-    $appType = $_GET['app_type'] ?? $_GET['app'] ?? '';
-    $_SESSION['app_type'] = $appType;
-    setcookie('app_type', $appType, time() + 365*24*3600, '/');
+function getBearerToken() {
+    $headers = null;
+    if (isset($_SERVER['Authorization'])) {
+        $headers = trim($_SERVER['Authorization']);
+    } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $headers = trim($_SERVER['HTTP_AUTHORIZATION']);
+    } elseif (function_exists('apache_request_headers')) {
+        $requestHeaders = apache_request_headers();
+        if (isset($requestHeaders['Authorization'])) {
+            $headers = trim($requestHeaders['Authorization']);
+        }
+    }
+    if (!empty($headers)) {
+        if (preg_match('/Bearer\s(\S+)/', $headers, $matches)) {
+            return $matches[1];
+        }
+    }
+    // Fallback to query param if needed (e.g. for SSE or images)
+    if (isset($_GET['token'])) {
+        return $_GET['token'];
+    }
+    return null;
 }
 
-if (empty($_SESSION['user']['id'])) {
-    $redirect = '/auth/auth.php';
-    if (!empty($_SESSION['is_app']) || isset($_COOKIE['nc_app'])) $redirect .= '?app=1';
-    header('Location: ' . $redirect);
+$token = getBearerToken();
+$payload = $token ? JWT::decode($token, JWT_SECRET) : false;
+
+$isApiRequest = str_starts_with($_SERVER['SCRIPT_NAME'] ?? '', '/api/') || str_starts_with($_SERVER['SCRIPT_NAME'] ?? '', '/auth/check_auth.php');
+
+if (!$payload || empty($payload['id'])) {
+    if ($isApiRequest) {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+    header('Location: /auth/auth.php');
     exit;
 }
 
-$fresh = getUserById((int) $_SESSION['user']['id']);
-$isApiRequest = str_starts_with($_SERVER['SCRIPT_NAME'] ?? '', '/api/');
+$fresh = getUserById((int) $payload['id']);
 
 if (!$fresh) {
-    session_destroy();
     if ($isApiRequest) {
         http_response_code(401);
         echo json_encode(['error' => 'Account deleted']);
@@ -37,10 +54,8 @@ if (!$fresh) {
     exit;
 }
 
-$_SESSION['user'] = $fresh;
-
 // Если доступ закрыт (бан или ожидание)
-if (empty($_SESSION['user']['is_approved'])) {
+if (empty($fresh['is_approved'])) {
     if ($isApiRequest) {
         // Исключаем user.php, чтобы фронтенд мог получить актуальный статус
         if (!str_ends_with($_SERVER['SCRIPT_NAME'], '/user.php')) {
@@ -51,4 +66,4 @@ if (empty($_SESSION['user']['is_approved'])) {
     }
 }
 
-$currentUser = $_SESSION['user'];
+$currentUser = $fresh;

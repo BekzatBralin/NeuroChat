@@ -33,7 +33,7 @@
         
         <div class="auth-actions">
           <button class="btn-refresh" @click="refreshPage">Обновить статус</button>
-          <a href="/auth/auth.php?action=logout" class="btn-logout">Выйти</a>
+          <a href="#" @click.prevent="logout" class="btn-logout">Выйти</a>
         </div>
       </div>
       
@@ -129,7 +129,8 @@ async function loginWithGoogle() {
           body: new URLSearchParams({ id_token: user.authentication.idToken })
         });
         const data = await res.json();
-        if (data.ok) {
+        if (data.ok && data.token) {
+          localStorage.setItem('nc_token', data.token);
           window.location.reload();
         } else {
           alert('Ошибка авторизации: ' + data.error);
@@ -141,6 +142,11 @@ async function loginWithGoogle() {
   } else {
     window.location.href = '/auth/auth.php?action=login';
   }
+}
+
+function logout() {
+  localStorage.removeItem('nc_token');
+  window.location.href = '/auth/auth.php?action=logout';
 }
 
 async function loginWithTelegramNative() {

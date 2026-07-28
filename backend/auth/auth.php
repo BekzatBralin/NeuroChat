@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['db'];
+require_once __DIR__ . '/jwt.php';
 
 // Инициализируем сессии в БД вместо стандартной системы PHP
 initSessionStorage();
@@ -13,9 +14,9 @@ if (isset($_GET['pending']) && !empty($_SESSION['tg_pending'])) {
 
 $action = $_GET['action'] ?? (isset($_GET['code']) ? 'callback' : 'page');
 
-if (isset($_SESSION['user']) && $action !== 'logout') {
-    if (isset($_GET['app']) && $_GET['app'] === 'mobile') $_SESSION['is_app'] = true;
-    header('Location: /');
+if (isset($_GET['token']) && $action !== 'logout') {
+    // If we land here with a token, just pass it through
+    header('Location: /?token=' . $_GET['token']);
     exit;
 }
 
@@ -55,10 +56,9 @@ if ($action === 'native_login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
 
     $user = upsertUser($googleUser);
-    $_SESSION['user'] = $user;
-    $_SESSION['is_app'] = true;
+    $jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
 
-    echo json_encode(['ok' => true]);
+    echo json_encode(['ok' => true, 'token' => $jwtToken]);
     exit;
 }
 
@@ -105,10 +105,10 @@ if ($action === 'callback' && isset($_GET['code'])) {
                 $error = 'Не удалось получить профиль от Google.';
             } else {
                 $user = upsertUser($profile);
-                $_SESSION['user'] = $user;
+                $jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
                 unset($_SESSION['oauth_state']);
                 session_write_close();
-                header('Location: /');
+                header('Location: /?token=' . $jwtToken);
                 exit;
             }
         }

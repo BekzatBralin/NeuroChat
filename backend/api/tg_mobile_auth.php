@@ -8,6 +8,7 @@
  */
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['db'];
+require_once __DIR__ . '/../auth/jwt.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -49,14 +50,10 @@ $name    = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''));
 $avatar  = $data['photo_url'] ?? null;
 
 $user = upsertTelegramUser($tgId, $name, $avatar);
+$jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
 
-// Создаём сессию в контексте WebView Capacitor
-initSessionStorage();
-session_start();
-$_SESSION['user'] = $user;
-session_write_close();
-
-echo json_encode(['ok' => true, 'user' => [
+echo json_encode(['ok' => true, 'token' => $jwtToken, 'user' => [
     'id' => (int)$user['id'],
-    'name' => $user['name'],
+    'name' => $user['name']
 ]]);
+exit;

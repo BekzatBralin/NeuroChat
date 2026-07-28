@@ -58,10 +58,13 @@ export const state = reactive({
     isTemp:             false,
     temperature:        null,
     toasts:             [],
+    notificationsEnabled: true,
 });
 
 let toastIdCounter = 0;
 export function addToast(message, type = 'info', duration = 3000) {
+    if (type !== 'error' && state.notificationsEnabled === false) return;
+    
     if (type === 'error') duration = 5000;
     
     const id = toastIdCounter++;

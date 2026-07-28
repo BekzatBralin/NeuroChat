@@ -2,6 +2,7 @@
   <div v-if="!isAppLoaded" class="app-loader"></div>
   <AuthPage v-else-if="!currentUser || !currentUser.is_approved" :user="currentUser" />
   <AdminPage v-else-if="isAdminRoute" :currentUser="currentUser" @close="closeAdmin" />
+  <DownloadPage v-else-if="isDownloadRoute" @close="closeDownload" />
   <div v-else class="app" :class="{ 'focus-mode': focusMode, 'global-bg': globalBgEnabled && focusBgUrl }">
     <!-- Focus BG -->
     <div class="focus-bg" id="focus-bg">
@@ -85,7 +86,11 @@
         @save-edit-message="onSaveEditMessage"
         @retry-message="onRetryMessage"
         @open-lightbox="() => {}"
+        @view-code="onViewCode"
       />
+
+      <!-- Banner -->
+      <AppBanner v-if="!isNativeApp && !isElectronApp" @openDownload="openDownload" />
 
       <!-- Message input -->
       <MessageInput
@@ -145,6 +150,14 @@
       @close="showHistoryModal = false" 
     />
 
+    <!-- Code Viewer Panel/Modal -->
+    <CodeViewer
+      :is-open="isCodePanelOpen"
+      :code-base64="previewCodeBase64"
+      :language="previewCodeLang"
+      @close="closeCodePanel"
+    />
+
   </div>
 </template>
 
@@ -160,6 +173,8 @@ import { renderMarkdown, autoCloseMarkdown, formatMd } from './utils/markdown';
 import Sidebar from './components/Sidebar.vue';
 import ChatArea from './components/ChatArea.vue';
 import MessageInput from './components/MessageInput.vue';
+import AppBanner from './components/AppBanner.vue';
+import DownloadPage from './components/DownloadPage.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import ShareModal from './components/ShareModal.vue';
 import ShareLinkModal from './components/ShareLinkModal.vue';
@@ -168,6 +183,7 @@ import InfoModal from './components/InfoModal.vue';
 import ConfirmModal from './components/ConfirmModal.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import RequestHistoryModal from './components/RequestHistoryModal.vue';
+import CodeViewer from './components/CodeViewer.vue';
 import AdminPage from './components/AdminPage.vue';
 import AuthPage from './components/AuthPage.vue';
 import { MODELS, state, addToast, loadModels } from './services/config.js';
@@ -203,6 +219,24 @@ const isShareLinkModalOpen = ref(false);
 const isMenuOpen = ref(false);
 const showHistoryModal = ref(false);
 const historyMessages = ref([]);
+
+// Code viewer
+const isCodePanelOpen = ref(false);
+const previewCodeBase64 = ref('');
+const previewCodeLang = ref('');
+
+function onViewCode({ codeBase64, lang }) {
+  previewCodeBase64.value = codeBase64;
+  previewCodeLang.value = lang;
+  isCodePanelOpen.value = true;
+  document.body.classList.add('panel-open');
+}
+
+function closeCodePanel() {
+  isCodePanelOpen.value = false;
+  document.body.classList.remove('panel-open');
+}
+
 const infoDocType = ref('');
 
 const touchStartX = ref(0);
@@ -235,6 +269,9 @@ const messageText = ref('');
 // ── UI State ──────────────────────────────────────
 const isAppLoaded = ref(false);
 const isAdminRoute = ref(false);
+const isDownloadRoute = ref(false);
+const isNativeApp = ref(Capacitor.isNativePlatform());
+const isElectronApp = ref(!!window.electron);
 const sidebarOpen = ref(window.innerWidth > 768);
 const isLight = ref(document.body.classList.contains('light-theme'));
 const focusMode = ref(false);
@@ -242,6 +279,16 @@ const chatTitle = ref('Новый чат');
 
 function closeAdmin() {
   window.location.href = '/';
+}
+
+function openDownload() {
+  window.history.pushState({}, '', '/download');
+  isDownloadRoute.value = true;
+}
+
+function closeDownload() {
+  window.history.pushState({}, '', '/');
+  isDownloadRoute.value = false;
 }
 
 watch(focusMode, (val) => {
@@ -287,6 +334,7 @@ async function reloadUser() {
       if (user.def_search !== undefined) {
         state.defaultSearchMode = user.def_search;
       }
+      state.notificationsEnabled = user.notifications !== 0;
     }
   } catch (e) {
     console.error('Failed to reload user:', e);
@@ -370,8 +418,10 @@ function newChat(temp = false) {
   nextTick(() => messageInputRef.value?.focus());
 }
 
-// ── Load Chat ────────────────────────────────────
 async function onSelectChat(uid) {
+  if (state.chatId === uid) return;
+  if (sidebarOpen.value && window.innerWidth <= 768) sidebarOpen.value = false;
+  closeCodePanel();
   try {
     const data = await fetchChat(uid);
     state.chatId = uid;
@@ -387,7 +437,6 @@ async function onSelectChat(uid) {
     state.model = chatMeta?.model || 'rigel';
     setUrl(uid);
 
-    if (window.innerWidth <= 768) sidebarOpen.value = false;
     nextTick(() => {
       chatAreaRef.value?.scrollToBottom(true);
       messageInputRef.value?.focus();
@@ -817,6 +866,7 @@ async function proceedSendMessage(text) {
 }
 
 async function notifyIfHidden(title, body) {
+  if (state.notificationsEnabled === false) return;
   if (window.electron) {
     // Electron checks focus and visibility on the backend
     window.electron.sendNotification(title, body);
@@ -1023,6 +1073,7 @@ async function pollAdminNotifications() {
     const data = await res.json();
     if (data.ok && data.notifications && data.notifications.length > 0) {
       for (const n of data.notifications) {
+        if (state.notificationsEnabled === false) continue;
         if (window.electron) {
           window.electron.sendNotification(n.title, n.message);
         } else if (Capacitor.isNativePlatform()) {
@@ -1045,12 +1096,8 @@ async function pollAdminNotifications() {
 }
 
 // ── Telegram App Links: авторизация через перехваченный URL ─────────────────
-// Когда Android App Links перехватывает редирект от Telegram на наш домен,
-// запрос НЕ доходит до сервера — вместо этого открывается приложение.
-// Мы парсим URL, достаём данные Telegram и шлём их на API напрямую.
 async function tryMobileAuth(url) {
   try {
-
     const parsed = new URL(url);
 
     // Случай 1: URL содержит данные Telegram (перехвачен редирект от TG)
@@ -1063,29 +1110,21 @@ async function tryMobileAuth(url) {
         body: JSON.stringify(params)
       });
       const data = await res.json();
-      if (data.ok) {
+      if (data.ok && data.token) {
         console.log('[AppLinks] Mobile auth success!');
+        localStorage.setItem('nc_token', data.token);
         return true;
       }
       console.warn('[AppLinks] Mobile auth failed:', data.error);
       return false;
     }
 
-    // Случай 2: URL содержит auth_token (для обратной совместимости)
-    const token = parsed.searchParams.get('auth_token');
+    // Случай 2: JWT Токен в URL
+    const token = parsed.searchParams.get('token') || parsed.searchParams.get('auth_token');
     if (token) {
-      console.log('[AppLinks] Exchanging auth_token...');
-      const res = await fetch('/api/exchange_token.php?token=' + encodeURIComponent(token));
-      const data = await res.json();
-      if (data.ok) {
-        console.log('[AppLinks] Token exchanged!');
-        if (data.session_id && data.session_name) {
-          document.cookie = `${data.session_name}=${data.session_id}; path=/; max-age=31536000`;
-        }
-        return true;
-      }
-      console.warn('[AppLinks] Token exchange failed:', data.error);
-      return false;
+      console.log('[AppLinks] Saving JWT token from URL...');
+      localStorage.setItem('nc_token', token);
+      return true;
     }
 
     return false;
@@ -1098,10 +1137,17 @@ async function tryMobileAuth(url) {
 // ── Init ─────────────────────────────────────────
 
 onMounted(async () => {
+  // Capture JWT token from web URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const webToken = urlParams.get('token');
+  if (webToken) {
+    localStorage.setItem('nc_token', webToken);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   // ── Обработка одноразового токена (Telegram App Links) ──────────────────────
-  // Если приложение открылось через App Link с ?auth_token=..., обмениваем его на сессию
   let exchanged = false;
-  if (Capacitor.isNativePlatform()) {
+  if (window.Capacitor && Capacitor.isNativePlatform()) {
     const launchUrl = await App.getLaunchUrl();
 
     if (launchUrl?.url) {
@@ -1113,7 +1159,7 @@ onMounted(async () => {
   }
   
   if (exchanged) {
-    window.history.replaceState({}, document.title, "/");
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
 
   try {
@@ -1128,6 +1174,9 @@ onMounted(async () => {
     if (currentUser.value && currentUser.value.def_search !== undefined) {
       state.defaultSearchMode = currentUser.value.def_search;
       state.useSearch = Number(localStorage.getItem('searchActive')) === 1 ? state.defaultSearchMode : 0;
+    }
+    if (currentUser.value) {
+      state.notificationsEnabled = currentUser.value.notifications !== 0;
     }
   } catch {}
 
@@ -1171,6 +1220,7 @@ onMounted(async () => {
       });
       
       PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        if (state.notificationsEnabled === false) return;
         // Show heads-up via LocalNotifications when in foreground
         LocalNotifications.schedule({
           notifications: [{
@@ -1209,6 +1259,9 @@ onMounted(async () => {
   const path = window.location.pathname;
   if (path.startsWith('/admin')) {
     isAdminRoute.value = true;
+  }
+  if (path.startsWith('/download')) {
+    isDownloadRoute.value = true;
   }
 
   // Load from URL or start new chat

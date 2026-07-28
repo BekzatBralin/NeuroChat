@@ -32,6 +32,7 @@ echo json_encode([
     'focus_bg'     => $currentUser['focus_bg'] ?? null,
     'def_search'   => (int)($currentUser['def_search'] ?? 3),
     'cache'        => (int)($currentUser['cache'] ?? 1),
+    'notifications' => (int)($currentUser['notifications'] ?? 1),
     'tts_settings' => empty($ttsSettings) ? new stdClass() : $ttsSettings,
     'channel_link' => env('CHANNEL_LINK', 'https://t.me/neurochat_news'),
     'support_link' => env('SUPPORT_LINK', 'https://t.me/neurochat_support'),

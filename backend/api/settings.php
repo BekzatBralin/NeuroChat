@@ -137,6 +137,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['ok' => true]);
         exit;
     }
+
+    if ($action === 'toggle_notifications') {
+        $notifications = (int)($inputData['notifications'] ?? 1);
+        $db->prepare('UPDATE users SET notifications=? WHERE id=?')->execute([$notifications, $userId]);
+        $_SESSION['user']['notifications'] = $notifications;
+        echo json_encode(['ok' => true]);
+        exit;
+    }
     
     if ($action === 'mode_save') {
         $slot   = (int)($_POST['slot'] ?? ($inputData['slot'] ?? 0));
@@ -230,6 +238,7 @@ echo json_encode([
         'accent_color' => $currentUser['accent_color'] ?? '#4f8fff',
         'focus_bg' => $currentUser['focus_bg'] ?? '',
         'push_enabled' => $currentUser['push_enabled'] ?? 1,
+        'notifications' => $currentUser['notifications'] ?? 1,
         'telegram_id' => $telegramId,
         'def_search' => $defSearch,
         'cache' => $useCache

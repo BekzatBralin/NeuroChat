@@ -1,20 +1,9 @@
 import { PATHS } from './config.js';
 
-const originalFetch = window.fetch;
-async function apiFetch(input, init) {
-    const res = await originalFetch(input, init);
-    // If it's a 401 or 403 error on an API request (except user.php which we use to check status)
-    if ((res.status === 401 || res.status === 403)) {
-        const urlStr = typeof input === 'string' ? input : input?.url;
-        if (urlStr && urlStr.includes('/api/') && !urlStr.includes('/api/user.php')) {
-            window.location.reload();
-        }
-    }
-    return res;
-}
+// The global fetch is now overridden in main.js to handle JWT auth and 401s
 
 export async function fetchCurrentUser() {
-    const res = await apiFetch('/api/user.php?t=' + Date.now());
+    const res = await fetch('/api/user.php?t=' + Date.now());
     if (!res.ok) return null;
     const user = await res.json();
     if (user) {
@@ -29,7 +18,7 @@ export async function fetchCurrentUser() {
 }
 
 export async function postJSON(url, body) {
-    return apiFetch(url, {
+    return fetch(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(body),
@@ -38,7 +27,7 @@ export async function postJSON(url, body) {
 
 async function getJSON(url, params = {}) {
     const qs = new URLSearchParams(params).toString();
-    const res = await apiFetch(qs ? `${url}?${qs}` : url);
+    const res = await fetch(qs ? `${url}?${qs}` : url);
     return res.json();
 }
 
@@ -46,7 +35,7 @@ export async function playTTS(text, voice, role = null) {
     const payload = { text, voice };
     if (role) payload.role = role;
     
-    const res = await apiFetch('/api/tts.php', {
+    const res = await fetch('/api/tts.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -61,7 +50,7 @@ export async function playTTS(text, voice, role = null) {
 }
 
 export async function streamChat(payload, signal = null) {
-    return apiFetch(PATHS.stream, {
+    return fetch(PATHS.stream, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
@@ -70,7 +59,7 @@ export async function streamChat(payload, signal = null) {
 }
 
 export async function sendChat(payload, signal = null) {
-    const res = await apiFetch(PATHS.api, {
+    const res = await fetch(PATHS.api, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
@@ -88,7 +77,7 @@ export async function uploadImage(file) {
     const fd = new FormData();
     fd.append('type', 'chat_image');
     fd.append('file', file);
-    const res  = await apiFetch(PATHS.upload, { method: 'POST', body: fd });
+    const res  = await fetch(PATHS.upload, { method: 'POST', body: fd });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Ошибка загрузки изображения');
     return data;
@@ -98,7 +87,7 @@ export async function uploadFile(file) {
     const fd = new FormData();
     fd.append('type', 'chat_file');
     fd.append('file', file);
-    const res     = await apiFetch(PATHS.upload, { method: 'POST', body: fd });
+    const res     = await fetch(PATHS.upload, { method: 'POST', body: fd });
     const rawBody = await res.text();
     let data = null;
     try { data = rawBody ? JSON.parse(rawBody) : null; } catch { data = null; }
@@ -109,7 +98,7 @@ export async function uploadFile(file) {
 export async function uploadSTT(file) {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await apiFetch('/api/stt.php', { method: 'POST', body: fd });
+    const res = await fetch('/api/stt.php', { method: 'POST', body: fd });
     const rawBody = await res.text();
     let data = null;
     try { data = rawBody ? JSON.parse(rawBody) : null; } catch { data = null; }

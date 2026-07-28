@@ -42,13 +42,14 @@ try {
     // 0. Import User Settings
     if (!empty($data['user'])) {
         $u = $data['user'];
-        $stmt = $db->prepare('UPDATE users SET nickname = ?, focus_bg = ?, accent_color = ?, def_search = ?, cache = ? WHERE id = ?');
+        $stmt = $db->prepare('UPDATE users SET nickname = ?, focus_bg = ?, accent_color = ?, def_search = ?, cache = ?, notifications = ? WHERE id = ?');
         $stmt->execute([
             $u['nickname'] ?? '',
             $u['focus_bg'] ?? null,
             $u['accent_color'] ?? '#4f8fff',
             $u['def_search'] ?? 3,
             $u['cache'] ?? 1,
+            $u['notifications'] ?? 1,
             $userId
         ]);
     }

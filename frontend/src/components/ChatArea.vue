@@ -1,5 +1,5 @@
 <template>
-  <div class="messages" id="messages" ref="messagesEl">
+  <div class="messages" id="messages" ref="messagesEl" @click="handleMessagesClick">
     <!-- Empty state -->
     <div class="empty-state" v-if="messages.length === 0 && !isLoading" id="empty-state">
       <div class="empty-state-icon">◈</div>
@@ -152,9 +152,7 @@ const props = defineProps({
   currentUser: Object,
 });
 
-const emit = defineEmits([
-  'insert-prompt', 'open-lightbox', 'edit-message', 'retry-message', 'save-edit-message'
-]);
+const emit = defineEmits(['insert-prompt', 'open-lightbox', 'edit-message', 'retry-message', 'save-edit-message', 'view-code']);
 
 const messagesEl = ref(null);
 const isNearBottom = ref(true);
@@ -357,16 +355,69 @@ onMounted(() => {
     try {
       const text = decodeURIComponent(escape(atob(b64)));
       navigator.clipboard.writeText(text).then(() => {
-        btn.textContent = '✓';
-        setTimeout(() => btn.textContent = 'Копировать', 2000);
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M20 6L9 17l-5-5"></path></svg>';
+        setTimeout(() => btn.innerHTML = originalHtml, 2000);
       });
     } catch {}
+  };
+
+  window.__downloadCode = (btn) => {
+    const b64 = btn.dataset.code;
+    let ext = btn.dataset.ext || 'txt';
+    const extMap = {
+      'javascript': 'js', 'python': 'py', 'typescript': 'ts', 'html': 'html',
+      'css': 'css', 'json': 'json', 'bash': 'sh', 'shell': 'sh', 'go': 'go',
+      'c': 'c', 'cpp': 'cpp', 'java': 'java', 'rust': 'rs', 'php': 'php',
+      'markdown': 'md', 'xml': 'xml', 'yaml': 'yml', 'sql': 'sql', 'ruby': 'rb',
+      'vue': 'vue', 'swift': 'swift', 'kotlin': 'kt', 'dockerfile': 'dockerfile'
+    };
+    ext = extMap[ext.toLowerCase()] || ext;
+    if (ext === 'code' || !ext) ext = 'txt';
+    
+    const token = Math.random().toString(36).substring(2, 12);
+    const fileName = `neurochat_${token}.${ext}`;
+    
+    try {
+      const text = decodeURIComponent(escape(atob(b64)));
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Download code failed', e);
+    }
   };
 });
 
 onUnmounted(() => {
   messagesEl.value?.removeEventListener('scroll', onScroll);
 });
+
+function handleMessagesClick(e) {
+  const previewBtn = e.target.closest('.btn-preview-code');
+  if (previewBtn) {
+    const codeBase64 = previewBtn.dataset.code;
+    const lang = previewBtn.dataset.ext;
+    emit('view-code', { codeBase64, lang });
+    return;
+  }
+  const copyBtn = e.target.closest('.btn-copy-code');
+  if (copyBtn) {
+    if (window.__copyCode) window.__copyCode(copyBtn);
+    return;
+  }
+  const downloadBtn = e.target.closest('.btn-download-code');
+  if (downloadBtn) {
+    if (window.__downloadCode) window.__downloadCode(downloadBtn);
+    return;
+  }
+}
 
 defineExpose({ scrollToBottom, isNearBottom });
 </script>

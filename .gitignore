@@ -39,3 +39,5 @@ backend/files/*
 
 # Firebase & Service Accounts
 backend/*.json
+frontend/public/downloads/*
+!frontend/public/downloads/.gitkeep
