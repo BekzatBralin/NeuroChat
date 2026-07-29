@@ -65,19 +65,19 @@ function storeTokenForApp($user, $state) {
     exit;
 }
 
-// Уже залогинен
-if (isset($_SESSION['user'])) {
+// Уже залогинен — НО только для веб-версии.
+// При from_app=1 (мобильное приложение) ВСЕГДА идём по TG-параметрам,
+// иначе существующая Google-сессия из WebView попадёт в Custom Chrome Tab
+// и пользователь войдёт под Google-аккаунтом вместо Telegram.
+$isFromApp = !empty($_GET['from_app']);
+
+if (isset($_SESSION['user']) && !$isFromApp) {
     $logMsg("Already logged in as user {$_SESSION['user']['id']}");
-    $state = $_GET['state'] ?? '';
-    if (!empty($_GET['from_app']) && $state) {
-        $logMsg("from_app=1, storing token for existing session");
-        storeTokenForApp($_SESSION['user'], $state);
-    }
     $logMsg("No from_app, redirecting to /");
     header('Location: /'); exit;
 }
 
-$logMsg("Not logged in");
+$logMsg("Not logged in (or from_app — always use TG params)");
 
 // Данные от Telegram виджета приходят GET-параметрами
 if (empty($_GET['id'])) {
