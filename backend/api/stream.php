@@ -111,6 +111,18 @@ if (!empty($dbModel['backend_model'])) {
     $body['model'] = $dbModel['backend_model'];
 }
 
+// Внедрение системного промпта для агента
+if ($modelKey === 'gemini-flash-agent') {
+    $agentPrompt = "Ты умный AI-агент. У тебя есть доступ к инструменту поиска в интернете.
+Если для ответа на вопрос пользователя тебе нужна свежая или точная информация (погода, новости, факты), выведи СТРОГО следующий блок и БОЛЬШЕ НИЧЕГО:
+<tool_call>
+{\"tool\": \"web_search\", \"query\": \"твой поисковый запрос\"}
+</tool_call>
+
+Дождись, пока тебе в историю сообщений не придет блок <tool_result>, и только тогда формируй финальный ответ.";
+    array_unshift($body['messages'], ['role' => 'system', 'content' => $agentPrompt]);
+}
+
 // Гарантируем stream=true в теле
 $body['stream'] = true;
 if (!empty($body['no_cache'])) {
@@ -123,84 +135,184 @@ $apiToken = env('GATEWAY_API_TOKEN');
 
 // Накапливаем ответ для сохранения
 
-$fullReply = '';
-$inTokens  = 0;
-$outTokens = 0;
-$sseBuffer = '';
-$cacheType = null;
+$maxIterations = 5;
+    $iteration = 0;
+    $finalInTokens = 0;
+    $finalOutTokens = 0;
+    $finalCostEnergy = 0;
+    $globalFullReply = '';
 
-$ch = curl_init();
-$curlOptions = [
-    CURLOPT_URL        => env('GATEWAY_URL') . '?action=stream',
-    CURLOPT_POST       => true,
-    CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . env('GATEWAY_API_TOKEN'),
-        'X-User-ID: ' . $userId,
-    ],
-    CURLOPT_TIMEOUT    => 300,
-    CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, &$fullReply, &$inTokens, &$outTokens, &$cacheType) {
-        // Пробрасываем клиенту сразу
-        echo $data;
-        if (ob_get_level() > 0) ob_flush();
-        flush();
+    while ($iteration < $maxIterations) {
+        $iteration++;
+        $fullReply = '';
+        $inTokens  = 0;
+        $outTokens = 0;
+        $sseBuffer = '';
+        $cacheType = null;
+        
+        $isToolCallMode = false;
+        $toolBuffer = '';
+        $flushBuffer = '';
 
-        // Параллельно парсим для сохранения
-        $sseBuffer .= $data;
-        $lines = explode("\n", $sseBuffer);
-        $sseBuffer = array_pop($lines);
+        $ch = curl_init();
+        $curlOptions = [
+            CURLOPT_URL        => env('GATEWAY_URL') . '?action=stream',
+            CURLOPT_POST       => true,
+            CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . env('GATEWAY_API_TOKEN'),
+                'X-User-ID: ' . $userId,
+            ],
+            CURLOPT_TIMEOUT    => 300,
+            CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, &$fullReply, &$inTokens, &$outTokens, &$cacheType, &$isToolCallMode, &$toolBuffer, &$flushBuffer) {
+                $sseBuffer .= $data;
+                $lines = explode("\n", $sseBuffer);
+                $sseBuffer = array_pop($lines);
 
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (!$line || !str_starts_with($line, 'data:')) continue;
-            $raw = trim(substr($line, 5));
-            if (!$raw || $raw === '[DONE]') continue;
-            $json = json_decode($raw, true);
-            if (!$json) continue;
-            if (!empty($json['text'])) $fullReply .= $json['text'];
-            if (!empty($json['done'])) {
-                $inTokens  = $json['in']  ?? 0;
-                $outTokens = $json['out'] ?? 0;
-                if (!empty($json['cache_type'])) {
-                    $cacheType = $json['cache_type'];
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if (!$line || !str_starts_with($line, 'data:')) continue;
+                    $raw = trim(substr($line, 5));
+                    if (!$raw || $raw === '[DONE]') continue;
+                    $json = json_decode($raw, true);
+                    if (!$json) continue;
+
+                    if (!empty($json['text'])) {
+                        $text = $json['text'];
+                        $fullReply .= $text;
+                        
+                        if ($isToolCallMode) {
+                            $toolBuffer .= $text;
+                        } else {
+                            $flushBuffer .= $text;
+                            if (str_contains($flushBuffer, '<tool_call>')) {
+                                $isToolCallMode = true;
+                                $toolBuffer = substr($flushBuffer, strpos($flushBuffer, '<tool_call>'));
+                                $flushBuffer = '';
+                                echo "data: " . json_encode(['tool_status' => '🔍 Анализ запроса...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                                flush();
+                            } else {
+                                $safeCut = 0;
+                                $ltPos = strrpos($flushBuffer, '<');
+                                if ($ltPos === false) {
+                                    $safeCut = strlen($flushBuffer);
+                                } else {
+                                    $potentialTag = substr($flushBuffer, $ltPos);
+                                    if (str_starts_with('<tool_call>', $potentialTag)) {
+                                        $safeCut = $ltPos;
+                                    } else {
+                                        $safeCut = strlen($flushBuffer);
+                                    }
+                                }
+                                if ($safeCut > 0) {
+                                    $safeText = substr($flushBuffer, 0, $safeCut);
+                                    $flushBuffer = substr($flushBuffer, $safeCut);
+                                    echo "data: " . json_encode(['text' => $safeText], JSON_UNESCAPED_UNICODE) . "\n\n";
+                                    flush();
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!empty($json['done'])) {
+                        $inTokens  = $json['in']  ?? 0;
+                        $outTokens = $json['out'] ?? 0;
+                        if (!empty($json['cache_type'])) {
+                            $cacheType = $json['cache_type'];
+                        }
+                    }
                 }
+                return strlen($data);
+            }
+        ];
+
+        $gatewayIp = env('GATEWAY_RESOLVE_IP');
+        if ($gatewayIp) {
+            $gatewayHost = parse_url(env('GATEWAY_URL'), PHP_URL_HOST);
+            $gatewayPort = parse_url(env('GATEWAY_URL'), PHP_URL_PORT) ?: (str_starts_with(env('GATEWAY_URL'), 'https') ? 443 : 80);
+            $curlOptions[CURLOPT_RESOLVE] = ["{$gatewayHost}:{$gatewayPort}:{$gatewayIp}"];
+        }
+
+        curl_setopt_array($ch, $curlOptions);
+        $ok = curl_exec($ch);
+        if (!$ok) {
+            $err = curl_error($ch);
+            echo "data: " . json_encode(['error' => 'Gateway error: ' . $err]) . "\n\n";
+            flush();
+            break;
+        }
+        curl_close($ch);
+        
+        // Flush any remaining normal text if we didn't enter tool mode
+        if (!$isToolCallMode && strlen($flushBuffer) > 0) {
+            echo "data: " . json_encode(['text' => $flushBuffer], JSON_UNESCAPED_UNICODE) . "\n\n";
+            flush();
+        }
+        
+        $globalFullReply .= $fullReply;
+        $finalInTokens += $inTokens;
+        $finalOutTokens += $outTokens;
+        
+        if ($baseEnergy > 0) {
+            $priceIn = (float)($dbModel['price_input'] ?? 0);
+            $priceOut = (float)($dbModel['price_output'] ?? 0);
+            $finalCostEnergy += (int)ceil((($inTokens / 1000000) * $priceIn * 1000) + (($outTokens / 1000000) * $priceOut * 1000));
+        }
+        
+        if ($isToolCallMode && str_contains($toolBuffer, '</tool_call>')) {
+            $jsonStr = substr($toolBuffer, strpos($toolBuffer, '<tool_call>') + 11);
+            $jsonStr = substr($jsonStr, 0, strpos($jsonStr, '</tool_call>'));
+            $toolData = json_decode(trim($jsonStr), true);
+            
+            if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'web_search') {
+                $query = $toolData['query'] ?? '';
+                echo "data: " . json_encode(['tool_status' => '🔍 Ищу: ' . $query], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $searchCh = curl_init();
+                curl_setopt($searchCh, CURLOPT_URL, env('GATEWAY_URL') . '?action=search');
+                curl_setopt($searchCh, CURLOPT_POST, true);
+                curl_setopt($searchCh, CURLOPT_POSTFIELDS, json_encode(['query' => $query], JSON_UNESCAPED_UNICODE));
+                curl_setopt($searchCh, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . env('GATEWAY_API_TOKEN')
+                ]);
+                curl_setopt($searchCh, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($searchCh, CURLOPT_TIMEOUT, 60);
+                $searchResRaw = curl_exec($searchCh);
+                curl_close($searchCh);
+                
+                $searchRes = json_decode($searchResRaw, true);
+                $resultText = $searchRes['result'] ?? "Ошибка: поиск не дал результатов.";
+                
+                echo "data: " . json_encode(['tool_status' => '✅ Результаты получены. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $body['messages'][] = [
+                    'role' => 'assistant',
+                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
+                ];
+                $body['messages'][] = [
+                    'role' => 'user',
+                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на эти данные."
+                ];
+                
+                // ВАЖНО: обновляем json_encode тела для следующего цикла
+                continue;
             }
         }
-        return strlen($data);
+        
+        break; // No tool call or failed to parse, exit loop
     }
-];
-
-$gatewayIp = env('GATEWAY_RESOLVE_IP');
-if ($gatewayIp) {
-    $gatewayHost = parse_url(env('GATEWAY_URL'), PHP_URL_HOST);
-    $gatewayPort = parse_url(env('GATEWAY_URL'), PHP_URL_PORT) ?: (str_starts_with(env('GATEWAY_URL'), 'https') ? 443 : 80);
-    $curlOptions[CURLOPT_RESOLVE] = ["{$gatewayHost}:{$gatewayPort}:{$gatewayIp}"];
-}
-
-curl_setopt_array($ch, $curlOptions);
-
-$ok = curl_exec($ch);
-if (!$ok) {
-    $err = curl_error($ch);
-    echo "data: " . json_encode(['error' => 'Gateway error: ' . $err]) . "\n\n";
-    flush();
-}
-curl_close($ch);
-
-// Сохраняем ответ ассистента после завершения стрима
-if ($chatUid && !$isTemp && $fullReply) {
-    saveMessage($chatUid, $userId, 'assistant', $fullReply, null, empty($cacheType) ? 0 : 1);
-}
-
-// Списываем энергию
-$costEnergy = 0;
-if ($baseEnergy > 0) {
-    $costEnergy = $baseEnergy;
-    if ($inTokens > 0 || $outTokens > 0) {
-        $priceIn = (float)($dbModel['price_input'] ?? 0);
-        $priceOut = (float)($dbModel['price_output'] ?? 0);
-        $costEnergy += (int)ceil((($inTokens / 1000000) * $priceIn * 1000) + (($outTokens / 1000000) * $priceOut * 1000));
+    
+    // Сохраняем ответ ассистента после завершения всех стримов
+    if ($chatUid && !$isTemp && $globalFullReply) {
+        saveMessage($chatUid, $userId, 'assistant', $globalFullReply, null, empty($cacheType) ? 0 : 1);
     }
-}
-logUsage($userId, $modelKey, $inTokens, $outTokens, $costEnergy);
+    
+    // Списываем энергию
+    if ($baseEnergy > 0) {
+        $finalCostEnergy += $baseEnergy; 
+    }
+    logUsage($userId, $modelKey, $finalInTokens, $finalOutTokens, $finalCostEnergy);

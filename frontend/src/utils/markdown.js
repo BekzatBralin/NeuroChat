@@ -139,6 +139,12 @@ export function formatMd(text) {
 export function renderMarkdown(text) {
   if (!text) return '';
   text = text.replace(/\r\n/g, '\n');
+  
+  // Merge consecutive think blocks (e.g. separated by a tool call)
+  text = text.replace(/<\/think>[\s\n]*(?:<tool_call>[\s\S]*?<\/tool_call>)?[\s\n]*<think>/g, '\n\n');
+  
+  // Completely hide any remaining tool calls from the final output
+  text = text.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
 
   let html = '';
   // Используем регулярку для поиска закрытых или открытых блоков think в любом месте текста

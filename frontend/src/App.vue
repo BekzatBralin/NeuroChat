@@ -81,6 +81,7 @@
         :isLoading="state.isLoading"
         :model="state.model"
         :streamingContent="streamingHtml"
+        :streamingToolStatus="streamingToolStatus"
         :currentUser="currentUser"
         @insert-prompt="onInsertPrompt"
         @save-edit-message="onSaveEditMessage"
@@ -303,6 +304,7 @@ const projects = ref([]);
 const projectChats = ref([]);
 const currentProject = ref(null);
 const streamingHtml = ref('');
+const streamingToolStatus = ref('');
 const currentUser = ref(null);
 
 
@@ -408,6 +410,7 @@ function newChat(temp = false) {
   state.isTemp = temp;
   state.attachedFiles = [];
   streamingHtml.value = '';
+  streamingToolStatus.value = '';
   messageText.value = '';
 
   chatTitle.value = temp ? '⊘ Временный чат' : 'Новый чат';
@@ -430,6 +433,7 @@ async function onSelectChat(uid) {
     state.isTemp = false;
     state.attachedFiles = [];
     streamingHtml.value = '';
+    streamingToolStatus.value = '';
     messageText.value = '';
 
     const chatMeta = historyChats.value.find(c => c.uid === uid);
@@ -680,8 +684,15 @@ async function handleStream(res) {
           throw new Error(msg);
         }
 
+        if (parsed.tool_status) {
+          streamingToolStatus.value = parsed.tool_status;
+        }
+
         if (parsed.text) {
           rawAccum += parsed.text;
+          if (streamingToolStatus.value && !parsed.tool_status) {
+            streamingToolStatus.value = '';
+          }
           repaint();
         }
 
@@ -803,6 +814,7 @@ async function proceedSendMessage(text) {
 
   state.isLoading = true;
   streamingHtml.value = '';
+  streamingToolStatus.value = '';
 
   try {
     const isStream = MODELS[state.model]?.isStream ?? true;
@@ -838,6 +850,7 @@ async function proceedSendMessage(text) {
 
       const streamResult = await handleStream(res);
       streamingHtml.value = '';
+      streamingToolStatus.value = '';
       state.messages.push({ role: 'assistant', content: streamResult.text, cacheType: streamResult.cacheType });
       notifyIfHidden('NeuroChat', `Ответ от ${payload.model} готов!`);
       await reloadUser();
@@ -851,6 +864,7 @@ async function proceedSendMessage(text) {
   } catch (e) {
     if (e.name !== 'AbortError') {
       streamingHtml.value = '';
+      streamingToolStatus.value = '';
       state.messages.push({ role: 'assistant', content: `❌ Ошибка: ${e.message}` });
       notifyIfHidden('NeuroChat', 'Произошла ошибка при получении ответа');
     }
@@ -995,6 +1009,7 @@ async function proceedResendLast(forceNoCache = false) {
 
   state.isLoading = true;
   streamingHtml.value = '';
+  streamingToolStatus.value = '';
 
   try {
     const payload = {
@@ -1015,13 +1030,18 @@ async function proceedResendLast(forceNoCache = false) {
       if (!res.ok) throw new Error(`Stream HTTP ${res.status}: ${res.statusText}`);
       const streamResult = await handleStream(res);
       streamingHtml.value = '';
+      streamingToolStatus.value = '';
       state.messages.push({ role: 'assistant', content: streamResult.text, cacheType: streamResult.cacheType });
     } else {
       const data = await sendChat(payload);
       state.messages.push({ role: 'assistant', content: data.reply, cacheType: data.cache_type || null });
     }
+    
+    await reloadUser();
+    await loadHistory();
   } catch (e) {
     streamingHtml.value = '';
+    streamingToolStatus.value = '';
     state.messages.push({ role: 'assistant', content: `❌ Ошибка: ${e.message}` });
   } finally {
     state.isLoading = false;

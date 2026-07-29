@@ -111,6 +111,13 @@
       </div>
     </template>
 
+    <!-- Streaming tool status -->
+    <div class="message-row assistant" v-if="streamingToolStatus">
+      <div class="bubble tool-status-bubble">
+        <span class="pulse-icon"></span> {{ streamingToolStatus }}
+      </div>
+    </div>
+
     <!-- Streaming bubble -->
     <div class="message-row assistant" v-if="streamingContent">
       <div class="bubble">
@@ -149,6 +156,7 @@ const props = defineProps({
   isLoading: Boolean,
   model: { type: String, default: 'rigel' },
   streamingContent: { type: String, default: '' },
+  streamingToolStatus: { type: String, default: '' },
   currentUser: Object,
 });
 
@@ -342,6 +350,10 @@ watch(() => props.streamingContent, () => {
   nextTick(() => scrollToBottom());
 });
 
+watch(() => props.streamingToolStatus, () => {
+  nextTick(() => scrollToBottom());
+});
+
 watch(() => props.isLoading, () => {
   nextTick(() => scrollToBottom());
 });
@@ -421,3 +433,28 @@ function handleMessagesClick(e) {
 
 defineExpose({ scrollToBottom, isNearBottom });
 </script>
+
+<style scoped>
+.tool-status-bubble {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.pulse-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #10b981;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+@keyframes pulse {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0.5; }
+}
+</style>
