@@ -41,3 +41,5 @@ backend/files/*
 backend/*.json
 frontend/public/downloads/*
 !frontend/public/downloads/.gitkeep
+frontend-pc/
+backend/api/dev_login.php

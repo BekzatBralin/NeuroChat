@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Хост: localhost:3306
--- Время создания: Июл 27 2026 г., 12:58
+-- Время создания: Июл 29 2026 г., 17:24
 -- Версия сервера: 10.11.14-MariaDB-0+deb12u2
 -- Версия PHP: 8.2.30
 
@@ -98,7 +98,7 @@ CREATE TABLE `chats` (
   `user_id` int(10) UNSIGNED NOT NULL,
   `uid` varchar(36) NOT NULL,
   `title` varchar(255) NOT NULL DEFAULT 'Новый чат',
-  `model` varchar(16) NOT NULL DEFAULT 'flash',
+  `model` varchar(50) NOT NULL,
   `pinned` tinyint(1) DEFAULT 0,
   `created_at` int(10) UNSIGNED NOT NULL DEFAULT 0,
   `updated_at` int(10) UNSIGNED NOT NULL DEFAULT 0,
@@ -162,6 +162,18 @@ CREATE TABLE `messages` (
 -- --------------------------------------------------------
 
 --
+-- Структура таблицы `mobile_auth_tokens`
+--
+
+CREATE TABLE `mobile_auth_tokens` (
+  `state` varchar(64) NOT NULL,
+  `token` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Структура таблицы `models`
 --
 
@@ -171,7 +183,7 @@ CREATE TABLE `models` (
   `display_name` varchar(128) NOT NULL,
   `backend_model` varchar(256) NOT NULL,
   `color_class` varchar(64) DEFAULT 'rigel',
-  `daily_limit` int(11) DEFAULT 0,
+  `base_energy` int(11) DEFAULT 1,
   `price_input` decimal(10,6) DEFAULT 0.000000,
   `price_output` decimal(10,6) DEFAULT 0.000000,
   `is_active` tinyint(1) DEFAULT 1,
@@ -261,7 +273,7 @@ CREATE TABLE `shared_chats` (
 CREATE TABLE `usage_log` (
   `id` int(10) UNSIGNED NOT NULL,
   `user_id` int(10) UNSIGNED NOT NULL,
-  `model` varchar(32) NOT NULL,
+  `model` varchar(50) NOT NULL,
   `input_tokens` int(10) UNSIGNED DEFAULT 0,
   `output_tokens` int(10) UNSIGNED DEFAULT 0,
   `ts` int(10) UNSIGNED NOT NULL DEFAULT 0
@@ -283,7 +295,7 @@ CREATE TABLE `users` (
   `avatar` text DEFAULT NULL,
   `focus_bg` varchar(500) DEFAULT '',
   `accent_color` varchar(7) DEFAULT '#4f8fff',
-  `role` enum('user','admin') NOT NULL DEFAULT 'user',
+  `role` enum('guest','user','pro','admin') NOT NULL DEFAULT 'guest',
   `is_approved` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` int(10) UNSIGNED NOT NULL DEFAULT 0,
   `last_login` int(10) UNSIGNED DEFAULT NULL,
@@ -291,7 +303,10 @@ CREATE TABLE `users` (
   `tg_token` varchar(64) DEFAULT NULL,
   `original_avatar` varchar(500) DEFAULT '',
   `def_search` int(11) DEFAULT 3,
-  `cache` tinyint(1) DEFAULT 1
+  `cache` tinyint(1) DEFAULT 1,
+  `notifications` tinyint(1) DEFAULT 1,
+  `energy` int(11) DEFAULT 0,
+  `last_energy_refill` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -415,6 +430,13 @@ ALTER TABLE `info_docs`
 ALTER TABLE `messages`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_messages_chat` (`chat_id`,`created_at`);
+
+--
+-- Индексы таблицы `mobile_auth_tokens`
+--
+ALTER TABLE `mobile_auth_tokens`
+  ADD PRIMARY KEY (`state`),
+  ADD KEY `idx_created` (`created_at`);
 
 --
 -- Индексы таблицы `models`
