@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Asia/Almaty');
 require_once __DIR__ . '/settings.php';
 
 function getDB(): PDO {

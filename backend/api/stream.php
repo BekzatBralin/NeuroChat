@@ -5,6 +5,8 @@ ini_set('display_errors', 0);
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['auth_guard'];
 require_once PATHS['db'];
+require_once __DIR__ . '/tools/calculator.php';
+require_once __DIR__ . '/tools/fetch_url.php';
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -113,14 +115,47 @@ if (!empty($dbModel['backend_model'])) {
 
 // Внедрение системного промпта для агента
 if ($modelKey === 'gemini-flash-agent') {
-    $agentPrompt = "Ты умный AI-агент. У тебя есть доступ к инструменту поиска в интернете.
-Если для ответа на вопрос пользователя тебе нужна свежая или точная информация (погода, новости, факты), выведи СТРОГО следующий блок и БОЛЬШЕ НИЧЕГО:
+    $currentDateTime = date('Y-m-d H:i') . ' (' . getDayOfWeek(date('N')) . ')';
+    $agentPrompt = "Текущее время сервера: {$currentDateTime}.
+Ты умный AI-агент. У тебя есть доступ к инструментам.
+1. Если нужна свежая информация из интернета, выведи СТРОГО:
 <tool_call>
-{\"tool\": \"web_search\", \"query\": \"твой поисковый запрос\"}
+{\"tool\": \"web_search\", \"query\": \"поисковый запрос\"}
 </tool_call>
 
-Дождись, пока тебе в историю сообщений не придет блок <tool_result>, и только тогда формируй финальный ответ.";
+2. Если нужно произвести точные математические расчеты (чтобы не галлюцинировать цифры), выведи СТРОГО:
+<tool_call>
+{\"tool\": \"calculator\", \"a\": \"123\", \"operator\": \"*\", \"b\": \"456\"}
+</tool_call>
+Поддерживаемые операторы: +, -, *, /, %, ^.
+
+3. Если нужно прочитать содержимое страницы по ссылке (URL), выведи СТРОГО:
+<tool_call>
+{\"tool\": \"fetch_url\", \"url\": \"https://example.com\"}
+</tool_call>
+
+Дождись, пока тебе придет блок <tool_result>, и только тогда формируй финальный ответ.";
     array_unshift($body['messages'], ['role' => 'system', 'content' => $agentPrompt]);
+} else {
+    // Для обычных моделей просто внедряем время, если у них нет системного промпта, либо обновляем существующий
+    $currentDateTime = date('Y-m-d H:i') . ' (' . getDayOfWeek(date('N')) . ')';
+    $hasSystem = false;
+    foreach ($body['messages'] as &$msg) {
+        if ($msg['role'] === 'system') {
+            $msg['content'] = "Текущее время сервера: {$currentDateTime}.\n" . $msg['content'];
+            $hasSystem = true;
+            break;
+        }
+    }
+    if (!$hasSystem) {
+        array_unshift($body['messages'], ['role' => 'system', 'content' => "Текущее время сервера: {$currentDateTime}."]);
+    }
+}
+
+// Вспомогательная функция для дней недели
+function getDayOfWeek($dayNum) {
+    $days = [1 => 'Понедельник', 2 => 'Вторник', 3 => 'Среда', 4 => 'Четверг', 5 => 'Пятница', 6 => 'Суббота', 7 => 'Воскресенье'];
+    return $days[$dayNum] ?? '';
 }
 
 // Гарантируем stream=true в теле
@@ -299,6 +334,50 @@ $maxIterations = 5;
                 ];
                 
                 // ВАЖНО: обновляем json_encode тела для следующего цикла
+                continue;
+            } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'calculator') {
+                $a = $toolData['a'] ?? null;
+                $operator = $toolData['operator'] ?? null;
+                $b = $toolData['b'] ?? null;
+                
+                echo "data: " . json_encode(['tool_status' => "🧮 Вычисляю: $a $operator $b"], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $resultText = tool_calculator($a, $operator, $b);
+                
+                echo "data: " . json_encode(['tool_status' => '✅ Результат вычислен. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $body['messages'][] = [
+                    'role' => 'assistant',
+                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
+                ];
+                $body['messages'][] = [
+                    'role' => 'user',
+                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на результат вычисления."
+                ];
+                
+                continue;
+            } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'fetch_url') {
+                $url = $toolData['url'] ?? '';
+                
+                echo "data: " . json_encode(['tool_status' => "🌍 Читаю страницу..."], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $resultText = tool_fetch_url($url);
+                
+                echo "data: " . json_encode(['tool_status' => '✅ Страница загружена. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $body['messages'][] = [
+                    'role' => 'assistant',
+                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
+                ];
+                $body['messages'][] = [
+                    'role' => 'user',
+                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на содержимое страницы."
+                ];
+                
                 continue;
             }
         }

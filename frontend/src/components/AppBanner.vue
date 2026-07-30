@@ -57,7 +57,7 @@ function downloadApp() {
   border-radius: 12px; /* var(--radius-lg) typically */
   padding: 8px 14px;
   position: relative;
-  z-index: 50;
+  z-index: 20;
   max-width: 828px;
   margin: 0 auto 12px auto;
   width: calc(100% - 32px);
