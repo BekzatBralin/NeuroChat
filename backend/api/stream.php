@@ -131,10 +131,12 @@ if ($modelKey === 'gemini-flash-agent') {
 </tool_call>
 Поддерживаемые операторы: +, -, *, /, %, ^.
 
+/*
 3. Если нужно прочитать содержимое страницы по ссылке (URL), выведи СТРОГО:
 <tool_call>
 {\"tool\": \"fetch_url\", \"url\": \"https://example.com\"}
 </tool_call>
+*/
 4. Если нужно сгенерировать ИЗОБРАЖЕНИЕ (нарисовать картинку, фото), выведи СТРОГО:
 <tool_call>
 {\"tool\": \"generate_image\", \"prompt\": \"подробный промпт на английском языке\"}
@@ -412,6 +414,7 @@ $maxIterations = 5;
                 ];
                 
                 continue;
+            /*
             } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'fetch_url') {
                 $url = $toolData['url'] ?? '';
                 
@@ -433,6 +436,7 @@ $maxIterations = 5;
                 ];
                 
                 continue;
+            */
             } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'run_python') {
                 echo "data: " . json_encode(['tool_status' => "🐍 Выполняю Python код..."], JSON_UNESCAPED_UNICODE) . "\n\n";
                 flush();
