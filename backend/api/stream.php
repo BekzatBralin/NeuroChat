@@ -8,6 +8,7 @@ require_once PATHS['db'];
 require_once __DIR__ . '/tools/calculator.php';
 require_once __DIR__ . '/tools/fetch_url.php';
 require_once __DIR__ . '/tools/media_tools.php';
+require_once __DIR__ . '/tools/e2b_tool.php';
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -143,6 +144,12 @@ if ($modelKey === 'gemini-flash-agent') {
 <tool_call>
 {\"tool\": \"generate_music\", \"prompt\": \"жанр музыки на английском (текст песни можно на русском)\"}
 </tool_call>
+
+6. Если нужно выполнить код на Python (сложные вычисления, построение графиков, парсинг данных), выведи СТРОГО:
+<tool_call>
+{\"tool\": \"run_python\", \"code\": \"print('hello')\"}
+</tool_call>
+В параметре code передавай чистый Python-код (используй \n для переноса строк и экранируй двойные кавычки). Песочница поддерживает популярные библиотеки (numpy, matplotlib и др.).
 
 Дождись, пока тебе придет блок <tool_result>. Для изображений и музыки вернется локальная ссылка. Обязательно встрой эту ссылку в свой финальный ответ с помощью Markdown-синтаксиса (например, ![image](/files/photos/...) для фото или [audio](/files/audio/...) для музыки).";
     array_unshift($body['messages'], ['role' => 'system', 'content' => $agentPrompt]);
@@ -294,6 +301,10 @@ $maxIterations = 5;
             echo "data: " . json_encode(['text' => $flushBuffer], JSON_UNESCAPED_UNICODE) . "\n\n";
             flush();
         }
+        // Убираем галлюцинации LLM после закрывающего тега
+        if ($isToolCallMode && str_contains($fullReply, '</tool_call>')) {
+            $fullReply = substr($fullReply, 0, strpos($fullReply, '</tool_call>') + 12);
+        }
         
         $globalFullReply .= $fullReply;
         $finalInTokens += $inTokens;
@@ -308,7 +319,14 @@ $maxIterations = 5;
         if ($isToolCallMode && str_contains($toolBuffer, '</tool_call>')) {
             $jsonStr = substr($toolBuffer, strpos($toolBuffer, '<tool_call>') + 11);
             $jsonStr = substr($jsonStr, 0, strpos($jsonStr, '</tool_call>'));
-            $toolData = json_decode(trim($jsonStr), true);
+            $jsonStr = trim($jsonStr);
+            
+            // Фикс для неэкранированных переносов строк внутри JSON-строк (частая проблема LLM)
+            $jsonStr = preg_replace_callback('/"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"/s', function($m) {
+                return str_replace(["\r", "\n"], ['\r', '\n'], $m[0]);
+            }, $jsonStr);
+            
+            $toolData = json_decode($jsonStr, true);
             
             if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'web_search') {
                 $query = $toolData['query'] ?? '';
@@ -412,6 +430,25 @@ $maxIterations = 5;
                 $body['messages'][] = [
                     'role' => 'user',
                     'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на содержимое страницы."
+                ];
+                
+                continue;
+            } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'run_python') {
+                echo "data: " . json_encode(['tool_status' => "🐍 Выполняю Python код..."], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $resultText = call_run_python($toolData);
+                
+                echo "data: " . json_encode(['tool_status' => '✅ Код выполнен. Анализирую результат...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $body['messages'][] = [
+                    'role' => 'assistant',
+                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
+                ];
+                $body['messages'][] = [
+                    'role' => 'user',
+                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь пользователю на основе вывода кода. Если были сгенерированы графики, обязательно вставь их ссылки в свой ответ."
                 ];
                 
                 continue;

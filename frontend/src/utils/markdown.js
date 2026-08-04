@@ -93,7 +93,7 @@ export function formatMd(text) {
   text = text.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
   // Bold
-  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
 
   // Images
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,
