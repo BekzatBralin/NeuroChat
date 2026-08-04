@@ -43,3 +43,9 @@ frontend/public/downloads/*
 !frontend/public/downloads/.gitkeep
 frontend-pc/
 backend/api/dev_login.php
+
+# Temporary ignoring
+frontend-m/
+openrouter_media_fix.md
+scratch/
+

@@ -7,6 +7,7 @@ require_once PATHS['auth_guard'];
 require_once PATHS['db'];
 require_once __DIR__ . '/tools/calculator.php';
 require_once __DIR__ . '/tools/fetch_url.php';
+require_once __DIR__ . '/tools/media_tools.php';
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -133,8 +134,17 @@ if ($modelKey === 'gemini-flash-agent') {
 <tool_call>
 {\"tool\": \"fetch_url\", \"url\": \"https://example.com\"}
 </tool_call>
+4. Если нужно сгенерировать ИЗОБРАЖЕНИЕ (нарисовать картинку, фото), выведи СТРОГО:
+<tool_call>
+{\"tool\": \"generate_image\", \"prompt\": \"подробный промпт на английском языке\"}
+</tool_call>
 
-Дождись, пока тебе придет блок <tool_result>, и только тогда формируй финальный ответ.";
+5. Если нужно сгенерировать МУЗЫКУ (песню, мелодию), выведи СТРОГО:
+<tool_call>
+{\"tool\": \"generate_music\", \"prompt\": \"жанр музыки на английском (текст песни можно на русском)\"}
+</tool_call>
+
+Дождись, пока тебе придет блок <tool_result>. Для изображений и музыки вернется локальная ссылка. Обязательно встрой эту ссылку в свой финальный ответ с помощью Markdown-синтаксиса (например, ![image](/files/photos/...) для фото или [audio](/files/audio/...) для музыки).";
     array_unshift($body['messages'], ['role' => 'system', 'content' => $agentPrompt]);
 } else {
     // Для обычных моделей просто внедряем время, если у них нет системного промпта, либо обновляем существующий
@@ -355,6 +365,32 @@ $maxIterations = 5;
                 $body['messages'][] = [
                     'role' => 'user',
                     'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на результат вычисления."
+                ];
+                
+                continue;
+            } else if ($toolData && isset($toolData['tool']) && ($toolData['tool'] === 'generate_image' || $toolData['tool'] === 'generate_music')) {
+                $toolName = $toolData['tool'];
+                
+                if ($toolName === 'generate_image') {
+                    echo "data: " . json_encode(['tool_status' => "🎨 Рисую изображение..."], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    flush();
+                    $resultText = call_generate_image($toolData);
+                } else {
+                    echo "data: " . json_encode(['tool_status' => "🎵 Пишу музыку..."], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    flush();
+                    $resultText = call_generate_music($toolData);
+                }
+                
+                echo "data: " . json_encode(['tool_status' => '✅ Медиа сгенерировано. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+                
+                $body['messages'][] = [
+                    'role' => 'assistant',
+                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
+                ];
+                $body['messages'][] = [
+                    'role' => 'user',
+                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОбязательно вставь полученную ссылку в свой ответ."
                 ];
                 
                 continue;

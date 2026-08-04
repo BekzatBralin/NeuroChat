@@ -102,7 +102,11 @@ export function formatMd(text) {
       <a href="${url}" download class="btn-download-img">⬇ Скачать</a>
     </div>`);
 
-  // Audio
+  // Audio - match [any text](url.mp3) or [audio](url)
+  text = text.replace(/\[([^\]]*)\]\(([^)]+\.mp3)\)/gi,
+    (_, text, url) => `<audio controls style="width:100%;margin-top:8px;border-radius:8px;"><source src="${url}" type="audio/mpeg"></audio>`);
+    
+  // Fallback for strict [audio](url) just in case
   text = text.replace(/\[audio\]\(([^)]+)\)/g,
     (_, url) => `<audio controls style="width:100%;margin-top:8px;border-radius:8px;"><source src="${url}" type="audio/mpeg"></audio>`);
 

@@ -22,14 +22,7 @@ domain.com {
 
 
     # ── Uploads / файлы ───────────────────────────────────────────
-    handle /files/docs/* {
-        root * /var/www/neurochat/backend
-        header Content-Type text/plain
-        header X-Content-Type-Options nosniff
-        header Content-Disposition inline
-        file_server
-    }
-    handle /files/photos/* {
+    handle /files/* {
         root * /var/www/neurochat/backend
         file_server
     }

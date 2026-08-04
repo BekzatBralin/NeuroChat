@@ -52,7 +52,16 @@ if (!str_contains(basename($uri), '.')) {
 if (str_starts_with($uri, '/files/')) {
     $filePath = __DIR__ . $uri;
     if (is_file($filePath)) {
-        return false;
+        $mime = mime_content_type($filePath);
+        if (str_ends_with($filePath, '.mp3')) $mime = 'audio/mpeg';
+        if (str_ends_with($filePath, '.jpg')) $mime = 'image/jpeg';
+        if (str_ends_with($filePath, '.png')) $mime = 'image/png';
+        
+        header("Content-Type: $mime");
+        header("Content-Length: " . filesize($filePath));
+        header("Accept-Ranges: none"); // Disable range to force full download in dev server
+        readfile($filePath);
+        return true;
     }
 }
 
