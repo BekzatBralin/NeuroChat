@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Хост: localhost:3306
--- Время создания: Июл 29 2026 г., 17:24
+-- Время создания: Авг 05 2026 г., 11:05
 -- Версия сервера: 10.11.14-MariaDB-0+deb12u2
 -- Версия PHP: 8.2.30
 
@@ -193,7 +193,8 @@ CREATE TABLE `models` (
   `system_prompt` text DEFAULT NULL,
   `description` varchar(512) DEFAULT '',
   `created_at` int(11) DEFAULT 0,
-  `updated_at` int(11) DEFAULT 0
+  `updated_at` int(11) DEFAULT 0,
+  `accent_color` varchar(16) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------

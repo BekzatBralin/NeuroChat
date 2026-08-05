@@ -102,6 +102,7 @@
         :isLoading="state.isLoading"
         :attachedFiles="state.attachedFiles"
         :useSearch="state.useSearch"
+        :useAgent="state.useAgent"
         :temperature="state.temperature"
         :currentUser="currentUser"
         @send="sendMessage"
@@ -111,6 +112,7 @@
         @remove-file="onRemoveFile"
         @files-selected="onFilesSelected"
         @toggle-search="toggleSearch"
+        @toggle-agent="toggleAgentMode"
         @show-context-history="showContextHistory"
         @toggle-focus="focusMode = !focusMode"
         @update:temperature="t => state.temperature = t"
@@ -600,6 +602,10 @@ function toggleSearch() {
   }
 }
 
+function toggleAgentMode() {
+  state.useAgent = !state.useAgent;
+}
+
 
 // ── Info / Menu ────────────────────────────────
 function onOpenInfo(type) {
@@ -826,6 +832,7 @@ async function proceedSendMessage(text) {
           content: m.role === 'assistant' ? m.content.replace(/<think>[\s\S]*?(?:<\/think>|$)/g, '').trim() : m.content
         })),
         search: state.useSearch,
+        isAgent: state.useAgent,
         chatUid: state.chatId,
         chatTitle: chatTitle.value || 'Чат',
         isTemp: state.isTemp,
@@ -1016,6 +1023,7 @@ async function proceedResendLast(forceNoCache = false) {
       model: state.model,
       messages: state.messages,
       search: state.useSearch,
+      isAgent: state.useAgent,
       chatUid: state.chatId,
       chatTitle: chatTitle.value || 'Чат',
       isTemp: state.isTemp,

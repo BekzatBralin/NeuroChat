@@ -40,7 +40,7 @@ if (isset($_GET['admin']) && $currentUser['role'] === 'admin') {
 }
 
 // For frontend chat (public, active only)
-$stmt = getDB()->query('SELECT key_name, display_name, color_class, accent_color, is_stream, supports_files, description, base_energy FROM models WHERE is_active = 1 ORDER BY sort_order ASC, display_name ASC');
+$stmt = getDB()->query("SELECT key_name, display_name, color_class, accent_color, is_stream, supports_files, description, base_energy FROM models WHERE is_active = 1 AND key_name NOT IN ('stt', 'tts', 'agent') ORDER BY sort_order ASC, display_name ASC");
 $models = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 echo json_encode(['models' => $models]);

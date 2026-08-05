@@ -29,6 +29,7 @@ $chatUid   = $body['chatUid']     ?? null;
 $chatTitle = $body['chatTitle']   ?? 'Чат';
 $oldChatId = $body['oldChatId']   ?? null;
 $isTemp    = (bool)($body['isTemp'] ?? false);
+$isAgent   = (bool)($body['isAgent'] ?? false);
 
 if (empty($messages)) {
     echo "data: " . json_encode(['error' => 'Нет сообщений']) . "\n\n";
@@ -49,10 +50,21 @@ if (!$dbModel) {
 }
 
 $baseEnergy = (int)$dbModel['base_energy'];
+$agentEnergy = 0;
+
+if ($isAgent) {
+    $stmtAgent = getDB()->prepare("SELECT base_energy FROM models WHERE key_name = 'agent' AND is_active = 1");
+    $stmtAgent->execute();
+    $agentModel = $stmtAgent->fetch();
+    if ($agentModel) {
+        $agentEnergy = (int)$agentModel['base_energy'];
+    }
+}
+$totalEnergy = $baseEnergy + $agentEnergy;
 $userEnergy = (int)($currentUser['energy'] ?? 0);
 
-if ($baseEnergy > 0 && $userEnergy < $baseEnergy && $currentUser['role'] !== 'admin') {
-    echo "data: " . json_encode(['error' => "Недостаточно энергии. Требуется {$baseEnergy}⚡, у вас {$userEnergy}⚡."]) . "\n\n";
+if ($totalEnergy > 0 && $userEnergy < $totalEnergy && $currentUser['role'] !== 'admin') {
+    echo "data: " . json_encode(['error' => "Недостаточно энергии. Требуется {$totalEnergy}⚡ (модель {$baseEnergy} + агент {$agentEnergy}), у вас {$userEnergy}⚡."]) . "\n\n";
     flush(); exit;
 }
 
@@ -116,7 +128,7 @@ if (!empty($dbModel['backend_model'])) {
 }
 
 // Внедрение системного промпта для агента
-if ($modelKey === 'gemini-flash-agent') {
+if ($isAgent) {
     $currentDateTime = date('Y-m-d H:i') . ' (' . getDayOfWeek(date('N')) . ')';
     $agentPrompt = "Текущее время сервера: {$currentDateTime}.
 Ты умный AI-агент. У тебя есть доступ к инструментам.
@@ -204,8 +216,9 @@ $maxIterations = 5;
         $sseBuffer = '';
         $cacheType = null;
         
-        $isToolCallMode = false;
-        $toolBuffer = '';
+    // Логика tool_calls для агента
+    $isToolCallMode = false;
+    $toolBuffer = '';
         $flushBuffer = '';
 
         $ch = curl_init();

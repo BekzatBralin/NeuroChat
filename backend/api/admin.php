@@ -68,13 +68,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $k = $input['key_name'] ?? '';
         if ($k) {
             getDB()->prepare(
-                'UPDATE models SET display_name=?, backend_model=?, color_class=?, base_energy=?,
+                'UPDATE models SET display_name=?, backend_model=?, color_class=?, accent_color=?, base_energy=?,
                  price_input=?, price_output=?, sort_order=?, description=?, updated_at=?
                  WHERE key_name=?'
             )->execute([
                 $input['display_name']  ?? '',
                 $input['backend_model'] ?? $k,
                 $input['color_class']   ?? 'rigel',
+                $input['accent_color']  ?? null,
                 (int)($input['base_energy']    ?? 1),
                 (float)($input['price_input']  ?? 0),
                 (float)($input['price_output'] ?? 0),

@@ -2946,3 +2946,6 @@ select.form-input option {
 }
 
 .hljs { background: transparent !important; }
+.app.global-bg .sidebar { background: rgba(30, 30, 30, 0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.app.global-bg .topbar { background: transparent; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.app.global-bg .input-box { background: rgba(30, 30, 30, 0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }

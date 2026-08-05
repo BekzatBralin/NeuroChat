@@ -110,6 +110,21 @@
               </div>
             </div>
 
+            <!-- Agent Mode -->
+            <div class="tools-separator"></div>
+            <div class="tools-label">Дополнения</div>
+            <div class="tools-item" style="display:flex; justify-content:space-between; align-items:center;" @click.stop="$emit('toggle-agent')">
+              <div class="tools-item-text">
+                <span>Агент-режим</span>
+                <span class="tools-item-hint">Поиск, инструменты и песочница</span>
+              </div>
+              <label class="toggle-switch-wrapper" style="pointer-events: none;">
+                <div class="toggle-switch" :class="{ 'on': useAgent }">
+                  <div class="toggle-slider"></div>
+                </div>
+              </label>
+            </div>
+
             <!-- Temperature -->
             <div class="tools-separator"></div>
             <div class="tools-label">Температура</div>
@@ -209,12 +224,13 @@ const props = defineProps({
   isLoading: Boolean,
   attachedFiles: { type: Array, default: () => [] },
   useSearch: Number,
+  useAgent: Boolean,
   temperature: { type: Number, default: null },
 });
 
 const emit = defineEmits([
   'send', 'update:model', 'remove-file', 'files-selected',
-  'toggle-search', 'show-context-history', 'toggle-focus',
+  'toggle-search', 'toggle-agent', 'show-context-history', 'toggle-focus',
   'update:temperature', 'open-lightbox', 'stop-generation'
 ]);
 

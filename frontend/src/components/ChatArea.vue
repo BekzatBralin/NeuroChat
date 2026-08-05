@@ -6,15 +6,15 @@
       <div class="empty-state-title">Привет, я {{ modelLabel }}</div>
       <div class="empty-state-sub">Rigel · Rigel Coder &nbsp;|&nbsp; Orion · Orion Pro &nbsp;|&nbsp; Ham · Ham Pro &nbsp;|&nbsp; Vega · Nebula · Lyria</div>
       <div class="empty-state-prompts">
-        <button class="prompt-chip" @click="$emit('insert-prompt', { text: 'Погода в ', searchMode: 1 })">
+        <button class="prompt-chip" @click="$emit('insert-prompt', { text: 'Погода в ', searchMode: 3 })">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></svg>
           Погода в...
         </button>
-        <button class="prompt-chip" @click="$emit('insert-prompt', { text: 'Во что поиграть, если мне нравится ', searchMode: 1 })">
+        <button class="prompt-chip" @click="$emit('insert-prompt', { text: 'Во что поиграть, если мне нравится ', searchMode: 3 })">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01M7 12h.01M17 12h.01"/></svg>
           Во что поиграть
         </button>
-        <button class="prompt-chip" @click="$emit('insert-prompt', { text: 'Что приготовить из ', searchMode: 1 })">
+        <button class="prompt-chip" @click="$emit('insert-prompt', { text: 'Что приготовить из ', searchMode: 3 })">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 11-1 9M3 3l18 18M10.5 10.5 3 18l3 3 7-7"/><path d="M17.5 6.5C19 5 21 5 21 5s0 2-1.5 3.5c-1.5 1.5-3 1-3 1s-.5-1.5 1-4.5"/></svg>
           Что приготовить
         </button>

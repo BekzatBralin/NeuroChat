@@ -47,6 +47,7 @@ export const state = reactive({
     model:              'rigel',
     useSearch:          Number(localStorage.getItem('searchActive')) === 1 ? (Number(localStorage.getItem('defaultSearchMode')) || 3) : 0,
     defaultSearchMode:  Number(localStorage.getItem('defaultSearchMode')) || 3,
+    useAgent:           true,
     useGeminiSearch:    false,
     chatId:             null,
     oldChatId:          null,

@@ -105,10 +105,17 @@
               <div class="frow">
                 <div class="f" style="flex:2"><label>Описание</label><input type="text" v-model="m.description" placeholder="Краткое описание модели..."></div>
                 <div class="f" style="flex:0.5">
-                  <label>Цвет</label>
+                  <label>Цвет значка</label>
                   <div style="display:flex; align-items:center; gap:6px;">
                     <input type="color" v-model="m.color_class" style="width:32px; height:32px; border:none; background:none; cursor:pointer; padding:0;">
                     <span style="font-family:var(--mono); font-size:11px; color:var(--text-3);">{{ m.color_class }}</span>
+                  </div>
+                </div>
+                <div class="f" style="flex:0.5">
+                  <label>Цвет акцента</label>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <input type="color" v-model="m.accent_color" style="width:32px; height:32px; border:none; background:none; cursor:pointer; padding:0;">
+                    <span style="font-family:var(--mono); font-size:11px; color:var(--text-3);">{{ m.accent_color || 'По умолч.' }}</span>
                   </div>
                 </div>
               </div>
@@ -601,6 +608,7 @@ async function saveModel(m) {
       price_output: m.price_output,
       sort_order: m.sort_order,
       color_class: m.color_class,
+      accent_color: m.accent_color,
       description: m.description
     });
     if (res.ok) {
