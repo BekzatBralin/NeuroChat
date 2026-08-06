@@ -558,13 +558,12 @@ function upsertChat(string $uid, int $userId, string $title, string $model): voi
 }
 
 function deleteChat(string $uid, int $userId): void {
-    // Сначала удаляем сообщения, потом чат
+    // Отвязываем чат от проекта и от пользователя, но сохраняем сами данные (сообщения и чат)
     $chat = getChatByUid($uid, $userId);
     if (!$chat) return;
     $db = getDB();
     $db->prepare('DELETE FROM chat_projects WHERE chat_id = ?')->execute([$chat['id']]);
-    $db->prepare('DELETE FROM messages WHERE chat_id = ?')->execute([$chat['id']]);
-    $db->prepare('DELETE FROM chats WHERE id = ?')->execute([$chat['id']]);
+    $db->prepare('UPDATE chats SET user_id = NULL WHERE id = ?')->execute([$chat['id']]);
 }
 function renameChat(string $uid, int $userId, string $title): void {
     getDB()->prepare('UPDATE chats SET title = ?, updated_at = UNIX_TIMESTAMP() WHERE uid = ? AND user_id = ?')
