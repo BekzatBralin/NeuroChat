@@ -1,4 +1,20 @@
 <?php
+// ── CORS для Capacitor мобильного приложения (local bundle mode) ──────────────
+// Android WebView в local mode использует origin 'http://localhost'.
+// Это покрывает все API endpoints без изменения каждого файла по отдельности.
+$_corsAllowed = ['http://localhost', 'capacitor://localhost', 'https://localhost'];
+$_corsOrigin  = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (in_array($_corsOrigin, $_corsAllowed, true)) {
+    header('Access-Control-Allow-Origin: ' . $_corsOrigin);
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-Token');
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(204);
+        exit;
+    }
+}
+unset($_corsAllowed, $_corsOrigin);
+// ─────────────────────────────────────────────────────────────────────────────
 // Загрузка .env переменных
 $envFile = __DIR__ . '/.env';
 if (file_exists($envFile)) {
