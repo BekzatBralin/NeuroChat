@@ -31,10 +31,39 @@
           </ol>
         </div>
 
-        <div class="download-action">
+        <div class="download-action" style="gap: 12px; flex-wrap: wrap;">
           <a href="/downloads/NeuroChat.exe" class="btn-download" download>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Скачать NeuroChat.exe
+          </a>
+          <a href="#" class="btn-download secondary" target="_blank">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            Скачать через Google Drive
+          </a>
+        </div>
+      </div>
+
+      <div class="platform-info" style="margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px;">
+        <div class="platform-header">
+          <h2>NeuroChat CLI для Windows</h2>
+          <p class="desc">Быстрый консольный клиент (TUI) для гиков и любителей терминала.</p>
+        </div>
+        <div class="guide-box">
+          <h3>Быстрый запуск</h3>
+          <ol>
+            <li>Скачайте <code>neurochat-cli.exe</code> по кнопке ниже.</li>
+            <li>Откройте терминал (PowerShell или CMD) в папке с файлом.</li>
+            <li>Запустите программу: <code>.\neurochat-cli.exe</code></li>
+          </ol>
+        </div>
+        <div class="download-action" style="gap: 12px; flex-wrap: wrap;">
+          <a href="/downloads/neurochat-cli.exe" class="btn-download" download>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+            Скачать neurochat-cli.exe
+          </a>
+          <a href="#" class="btn-download secondary" target="_blank">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            Скачать через Google Drive
           </a>
         </div>
       </div>
@@ -58,10 +87,14 @@
           </ol>
         </div>
 
-        <div class="download-action">
+        <div class="download-action" style="gap: 12px; flex-wrap: wrap;">
           <a href="/downloads/NeuroChat.apk" class="btn-download" download>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Скачать NeuroChat.apk
+          </a>
+          <a href="#" class="btn-download secondary" target="_blank">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            Скачать через Google Drive
           </a>
         </div>
       </div>
@@ -80,42 +113,68 @@
           <div class="linux-card">
             <h3>AppImage <span class="badge recommend">Рекомендуется</span></h3>
             <p class="subdesc">Универсальный портативный формат, работающий на любом дистрибутиве без установки.</p>
-            <div class="guide-box small">
+            <div class="guide-box small" style="margin-top: auto;">
               <ol>
                 <li>Скачайте файл.</li>
                 <li>Дайте права на выполнение: <code>chmod +x NeuroChat.AppImage</code></li>
                 <li>Запустите двойным кликом.</li>
               </ol>
             </div>
-            <a href="/downloads/NeuroChat.AppImage" class="btn-download sm" download>Скачать .AppImage</a>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <a href="/downloads/NeuroChat.AppImage" class="btn-download sm" style="justify-content: center;" download>Скачать .AppImage</a>
+              <a href="#" class="btn-download sm secondary" style="justify-content: center;" target="_blank">Google Drive</a>
+            </div>
           </div>
 
           <!-- Arch -->
           <div class="linux-card">
             <h3>Arch-based</h3>
             <p class="subdesc">Нативная сборка для Arch Linux, Manjaro, EndeavourOS и др.</p>
-            <div class="guide-box small">
+            <div class="guide-box small" style="margin-top: auto;">
               <ol>
                 <li>Скачайте <code>.pacman</code> файл.</li>
                 <li>Откройте терминал в папке с загрузкой.</li>
                 <li>Выполните: <code>sudo pacman -U ./neurochat.pacman</code> (потребуется пароль <code>sudo</code>).</li>
               </ol>
             </div>
-            <a href="/downloads/neurochat.pacman" class="btn-download sm" download>Скачать .pacman</a>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <a href="/downloads/neurochat.pacman" class="btn-download sm" style="justify-content: center;" download>Скачать .pacman</a>
+              <a href="#" class="btn-download sm secondary" style="justify-content: center;" target="_blank">Google Drive</a>
+            </div>
           </div>
 
           <!-- Debian -->
           <div class="linux-card">
             <h3>Debian-based</h3>
             <p class="subdesc">Сборка для Debian, Ubuntu, Linux Mint, Pop!_OS и др.</p>
-            <div class="guide-box small">
+            <div class="guide-box small" style="margin-top: auto;">
               <ol>
                 <li>Скачайте <code>.deb</code> файл.</li>
                 <li>Откройте терминал в папке с файлом.</li>
                 <li>Выполните: <code>sudo apt install ./neurochat.deb</code></li>
               </ol>
             </div>
-            <a href="/downloads/neurochat.deb" class="btn-download sm" download>Скачать .deb</a>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <a href="/downloads/neurochat.deb" class="btn-download sm" style="justify-content: center;" download>Скачать .deb</a>
+              <a href="#" class="btn-download sm secondary" style="justify-content: center;" target="_blank">Google Drive</a>
+            </div>
+          </div>
+
+          <!-- CLI -->
+          <div class="linux-card">
+            <h3>Terminal CLI (TUI)</h3>
+            <p class="subdesc">Консольный клиент NeuroChat для гиков. Быстро, стильно, прямо в терминале.</p>
+            <div class="guide-box small" style="margin-top: auto;">
+              <ol>
+                <li>Скачайте бинарник.</li>
+                <li><code>chmod +x neurochat-cli-linux</code></li>
+                <li>Запустите <code>./neurochat-cli-linux</code></li>
+              </ol>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <a href="/downloads/neurochat-cli-linux" class="btn-download sm" style="justify-content: center;" download>Скачать бинарник</a>
+              <a href="#" class="btn-download sm secondary" style="justify-content: center;" target="_blank">Google Drive</a>
+            </div>
           </div>
         </div>
       </div>
@@ -304,6 +363,17 @@ const activeTab = ref('windows');
   font-size: 13px;
 }
 
+.btn-download.secondary {
+  background: var(--bg-3);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+.btn-download.secondary:hover {
+  background: var(--bg-2);
+  color: var(--text);
+}
+
 .btn-download:hover {
   opacity: 0.9;
   transform: translateY(-1px);
@@ -337,7 +407,6 @@ const activeTab = ref('windows');
   font-size: 13px;
   color: var(--text-3);
   margin: 0;
-  flex: 1;
 }
 
 .badge.recommend {

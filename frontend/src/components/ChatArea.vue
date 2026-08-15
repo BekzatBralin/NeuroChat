@@ -206,6 +206,8 @@ function getVoiceForMsg(text) {
 }
 
 async function playTtsMsg(idx, text) {
+  if (ttsLoadingIdx.value !== -1) return; // Block if another TTS is loading
+
   if (ttsPlayingIdx.value === idx && currentAudio) {
     currentAudio.pause();
     currentAudio = null;
@@ -243,7 +245,14 @@ async function playTtsMsg(idx, text) {
   ttsLoadingIdx.value = idx;
   try {
     const res = await playTTS(cleanText, v.voice, v.role);
-    if (res.audio_base64) {
+    if (res.stream_url) {
+      currentAudio = new Audio(res.stream_url + '&token=' + (localStorage.getItem('nc_token') || ''));
+      currentAudio.onended = () => {
+        if (ttsPlayingIdx.value === idx) ttsPlayingIdx.value = -1;
+      };
+      currentAudio.play();
+      ttsPlayingIdx.value = idx;
+    } else if (res.audio_base64) {
       currentAudio = new Audio('data:audio/mp3;base64,' + res.audio_base64);
       currentAudio.onended = () => {
         if (ttsPlayingIdx.value === idx) ttsPlayingIdx.value = -1;

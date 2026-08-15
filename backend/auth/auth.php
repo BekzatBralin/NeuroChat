@@ -75,6 +75,11 @@ if ($action === 'native_login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 if ($action === 'login') {
     $_SESSION['oauth_state'] = bin2hex(random_bytes(16));
+    // CLI: save port and state for localhost callback
+    if (!empty($_GET['cli_state'])) {
+        $_SESSION['cli_state'] = preg_replace('/[^a-zA-Z0-9\-_]/', '', $_GET['cli_state']);
+        $_SESSION['cli_port']  = (int)($_GET['cli_port'] ?? 0);
+    }
     $params = http_build_query([
         'client_id'     => GOOGLE_CLIENT_ID,
         'redirect_uri'  => GOOGLE_REDIRECT_URI,
@@ -125,6 +130,10 @@ if ($action === 'callback' && isset($_GET['code'])) {
                         $error = 'upsertUser вернул пустого пользователя!';
                     } else {
                         $jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
+
+                        // CLI: redirect to localhost callback if cli_port and cli_state are present
+                        $cliPort  = (int)($_SESSION['cli_port'] ?? 0);
+                        $cliState = $_SESSION['cli_state'] ?? '';
                         
                         // Уничтожаем временную сессию OAuth
                         session_destroy();
@@ -135,8 +144,15 @@ if ($action === 'callback' && isset($_GET['code'])) {
                                 $params["secure"], $params["httponly"]
                             );
                         }
-                        
-                        header('Location: /?token=' . $jwtToken);
+
+                        if ($cliPort >= 1024 && $cliPort <= 65535 && $cliState) {
+                            $callbackUrl = 'http://127.0.0.1:' . $cliPort . '/callback'
+                                . '?token=' . urlencode($jwtToken)
+                                . '&state=' . urlencode($cliState);
+                            header('Location: ' . $callbackUrl);
+                        } else {
+                            header('Location: /?token=' . $jwtToken);
+                        }
                         exit;
                     }
                 } catch (\Throwable $e) {

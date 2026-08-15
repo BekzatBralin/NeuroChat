@@ -86,7 +86,9 @@ if (empty($_GET['id'])) {
 }
 
 $state = $_GET['state'] ?? '';
-$logMsg("Telegram id={$_GET['id']}, from_app=" . ($_GET['from_app'] ?? 'NOT SET') . ", state=$state");
+$cliPort = (int)($_GET['cli_port'] ?? 0);
+$isFromCli = !empty($_GET['from_cli']);
+$logMsg("Telegram id={$_GET['id']}, from_app=" . ($_GET['from_app'] ?? 'NOT SET') . ", from_cli=" . ($isFromCli ? '1' : '0') . ", cli_port=$cliPort, state=$state");
 
 // ── ПРОВЕРКА ПОДПИСИ ──────────────────────────────────────────────────────────
 $data = $_GET;
@@ -94,6 +96,8 @@ $hash = $data['hash'] ?? '';
 unset($data['hash']);
 unset($data['from_app']); // Убираем кастомные параметры из проверки подписи!
 unset($data['state']);
+unset($data['from_cli']);
+unset($data['cli_port']);
 
 ksort($data);
 $checkString = implode("\n", array_map(fn($k,$v) => "$k=$v", array_keys($data), $data));
@@ -125,6 +129,24 @@ $logMsg("User upserted: id={$user['id']}");
 if (!empty($_GET['from_app']) && $state) {
     $logMsg("from_app is set with state, storing token");
     storeTokenForApp($user, $state);
+}
+
+// CLI: redirect to localhost callback
+if ($isFromCli && $state) {
+    $jwtToken = JWT::encode(['id' => $user['id']], JWT_SECRET);
+    if ($cliPort >= 1024 && $cliPort <= 65535) {
+        // Direct localhost callback
+        $logMsg("CLI flow: redirecting to localhost:$cliPort");
+        $callbackUrl = 'http://127.0.0.1:' . $cliPort . '/callback'
+            . '?token=' . urlencode($jwtToken)
+            . '&state=' . urlencode($state);
+        header('Location: ' . $callbackUrl);
+        exit;
+    } else {
+        // Fallback: store token for polling
+        $logMsg("CLI flow (polling fallback): storing token for state=$state");
+        storeTokenForApp($user, $state);
+    }
 }
 
 // Для веб-версии

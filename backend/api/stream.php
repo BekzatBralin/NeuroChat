@@ -381,6 +381,8 @@ $maxIterations = 5;
             
             $globalFullReply .= $toolBlock . "\n\n";
             
+            $multiCh = null;
+            $searchRequests = [];
             foreach ($toolCallsFromGateway as &$tcRef) {
                 if (($tcRef['name'] ?? '') === 'web_search') {
                     if ($multiCh === null) $multiCh = curl_multi_init();
