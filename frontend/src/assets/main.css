@@ -2949,3 +2949,55 @@ select.form-input option {
 .app.global-bg .sidebar { background: rgba(30, 30, 30, 0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .app.global-bg .topbar { background: transparent; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .app.global-bg .input-box { background: rgba(30, 30, 30, 0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+
+/* Tool Use Block Styling */
+.tool-use-block {
+    margin: 12px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-2);
+}
+.tool-use-summary {
+    padding: 10px 14px;
+    background: var(--bg-3);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-2);
+    user-select: none;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+.tool-use-summary:hover { 
+    background: var(--bg-4); 
+    color: var(--text-1); 
+}
+.tool-use-content {
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.5;
+    border-top: 1px solid var(--border);
+    background: var(--bg-1);
+    max-height: 300px;
+    overflow-y: auto;
+}
+.tool-use-content pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* Markdown Links */
+.md-link {
+    color: #3b82f6;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+.md-link:hover {
+    text-decoration: underline;
+    color: #60a5fa;
+}

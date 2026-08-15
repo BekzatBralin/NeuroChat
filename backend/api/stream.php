@@ -130,43 +130,84 @@ if (!empty($dbModel['backend_model'])) {
 // Внедрение системного промпта для агента
 if ($isAgent) {
     $currentDateTime = date('Y-m-d H:i') . ' (' . getDayOfWeek(date('N')) . ')';
-    $agentPrompt = "Текущее время сервера: {$currentDateTime}.
-Ты умный AI-агент. У тебя есть доступ к инструментам.
-1. Если нужна свежая информация из интернета, выведи СТРОГО:
-<tool_call>
-{\"tool\": \"web_search\", \"query\": \"поисковый запрос\"}
-</tool_call>
-
-2. Если нужно произвести точные математические расчеты (чтобы не галлюцинировать цифры), выведи СТРОГО:
-<tool_call>
-{\"tool\": \"calculator\", \"a\": \"123\", \"operator\": \"*\", \"b\": \"456\"}
-</tool_call>
-Поддерживаемые операторы: +, -, *, /, %, ^.
-
-/*
-3. Если нужно прочитать содержимое страницы по ссылке (URL), выведи СТРОГО:
-<tool_call>
-{\"tool\": \"fetch_url\", \"url\": \"https://example.com\"}
-</tool_call>
-*/
-4. Если нужно сгенерировать ИЗОБРАЖЕНИЕ (нарисовать картинку, фото), выведи СТРОГО:
-<tool_call>
-{\"tool\": \"generate_image\", \"prompt\": \"подробный промпт на английском языке\"}
-</tool_call>
-
-5. Если нужно сгенерировать МУЗЫКУ (песню, мелодию), выведи СТРОГО:
-<tool_call>
-{\"tool\": \"generate_music\", \"prompt\": \"жанр музыки на английском (текст песни можно на русском)\"}
-</tool_call>
-
-6. Если нужно выполнить код на Python (сложные вычисления, построение графиков, парсинг данных), выведи СТРОГО:
-<tool_call>
-{\"tool\": \"run_python\", \"code\": \"print('hello')\"}
-</tool_call>
-В параметре code передавай чистый Python-код (используй \n для переноса строк и экранируй двойные кавычки). Песочница поддерживает популярные библиотеки (numpy, matplotlib и др.).
-
-Дождись, пока тебе придет блок <tool_result>. Для изображений и музыки вернется локальная ссылка. Обязательно встрой эту ссылку в свой финальный ответ с помощью Markdown-синтаксиса (например, ![image](/files/photos/...) для фото или [audio](/files/audio/...) для музыки).";
+    $agentPrompt = "Текущее время сервера: {$currentDateTime}.\nТы умный AI-агент. У тебя есть доступ к инструментам. Вызывай их при необходимости.\nДля изображений и музыки инструменты вернут тебе локальную ссылку. Обязательно встрой эту ссылку в свой финальный ответ с помощью Markdown-синтаксиса (например, ![image](/files/photos/...) для фото или [audio](/files/audio/...) для музыки).";
     array_unshift($body['messages'], ['role' => 'system', 'content' => $agentPrompt]);
+    
+    // Подключение Native Tools
+    $body['tools'] = [
+        [
+            "type" => "function",
+            "function" => [
+                "name" => "web_search",
+                "description" => "Поиск информации в интернете",
+                "parameters" => [
+                    "type" => "object",
+                    "properties" => [
+                        "query" => ["type" => "string", "description" => "Поисковый запрос"]
+                    ],
+                    "required" => ["query"]
+                ]
+            ]
+        ],
+        [
+            "type" => "function",
+            "function" => [
+                "name" => "calculator",
+                "description" => "Точные математические расчеты",
+                "parameters" => [
+                    "type" => "object",
+                    "properties" => [
+                        "a" => ["type" => "string", "description" => "Первое число"],
+                        "operator" => ["type" => "string", "description" => "Оператор (+, -, *, /, %, ^)"],
+                        "b" => ["type" => "string", "description" => "Второе число"]
+                    ],
+                    "required" => ["a", "operator", "b"]
+                ]
+            ]
+        ],
+        [
+            "type" => "function",
+            "function" => [
+                "name" => "generate_image",
+                "description" => "Генерация изображений и фото",
+                "parameters" => [
+                    "type" => "object",
+                    "properties" => [
+                        "prompt" => ["type" => "string", "description" => "Подробный промпт на английском языке"]
+                    ],
+                    "required" => ["prompt"]
+                ]
+            ]
+        ],
+        [
+            "type" => "function",
+            "function" => [
+                "name" => "generate_music",
+                "description" => "Генерация музыки и песен",
+                "parameters" => [
+                    "type" => "object",
+                    "properties" => [
+                        "prompt" => ["type" => "string", "description" => "Жанр музыки на английском (текст песни можно на русском)"]
+                    ],
+                    "required" => ["prompt"]
+                ]
+            ]
+        ],
+        [
+            "type" => "function",
+            "function" => [
+                "name" => "run_python",
+                "description" => "Выполнение кода на Python (сложные вычисления, построение графиков, парсинг данных). Песочница поддерживает популярные библиотеки (numpy, matplotlib).",
+                "parameters" => [
+                    "type" => "object",
+                    "properties" => [
+                        "code" => ["type" => "string", "description" => "Чистый Python-код"]
+                    ],
+                    "required" => ["code"]
+                ]
+            ]
+        ]
+    ];
 } else {
     // Для обычных моделей просто внедряем время, если у них нет системного промпта, либо обновляем существующий
     $currentDateTime = date('Y-m-d H:i') . ' (' . getDayOfWeek(date('N')) . ')';
@@ -217,9 +258,7 @@ $maxIterations = 5;
         $cacheType = null;
         
     // Логика tool_calls для агента
-    $isToolCallMode = false;
-    $toolBuffer = '';
-        $flushBuffer = '';
+    $toolCallsFromGateway = [];
 
         $ch = curl_init();
         $curlOptions = [
@@ -232,7 +271,7 @@ $maxIterations = 5;
                 'X-User-ID: ' . $userId,
             ],
             CURLOPT_TIMEOUT    => 300,
-            CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, &$fullReply, &$inTokens, &$outTokens, &$cacheType, &$isToolCallMode, &$toolBuffer, &$flushBuffer) {
+            CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, &$fullReply, &$inTokens, &$outTokens, &$cacheType, &$toolCallsFromGateway) {
                 $sseBuffer .= $data;
                 $lines = explode("\n", $sseBuffer);
                 $sseBuffer = array_pop($lines);
@@ -248,38 +287,12 @@ $maxIterations = 5;
                     if (!empty($json['text'])) {
                         $text = $json['text'];
                         $fullReply .= $text;
-                        
-                        if ($isToolCallMode) {
-                            $toolBuffer .= $text;
-                        } else {
-                            $flushBuffer .= $text;
-                            if (str_contains($flushBuffer, '<tool_call>')) {
-                                $isToolCallMode = true;
-                                $toolBuffer = substr($flushBuffer, strpos($flushBuffer, '<tool_call>'));
-                                $flushBuffer = '';
-                                echo "data: " . json_encode(['tool_status' => '🔍 Анализ запроса...'], JSON_UNESCAPED_UNICODE) . "\n\n";
-                                flush();
-                            } else {
-                                $safeCut = 0;
-                                $ltPos = strrpos($flushBuffer, '<');
-                                if ($ltPos === false) {
-                                    $safeCut = strlen($flushBuffer);
-                                } else {
-                                    $potentialTag = substr($flushBuffer, $ltPos);
-                                    if (str_starts_with('<tool_call>', $potentialTag)) {
-                                        $safeCut = $ltPos;
-                                    } else {
-                                        $safeCut = strlen($flushBuffer);
-                                    }
-                                }
-                                if ($safeCut > 0) {
-                                    $safeText = substr($flushBuffer, 0, $safeCut);
-                                    $flushBuffer = substr($flushBuffer, $safeCut);
-                                    echo "data: " . json_encode(['text' => $safeText], JSON_UNESCAPED_UNICODE) . "\n\n";
-                                    flush();
-                                }
-                            }
-                        }
+                        echo "data: " . json_encode(['text' => $text], JSON_UNESCAPED_UNICODE) . "\n\n";
+                        flush();
+                    }
+                    
+                    if (!empty($json['tool_calls'])) {
+                        $toolCallsFromGateway = $json['tool_calls'];
                     }
                     
                     if (!empty($json['done'])) {
@@ -311,16 +324,6 @@ $maxIterations = 5;
         }
         curl_close($ch);
         
-        // Flush any remaining normal text if we didn't enter tool mode
-        if (!$isToolCallMode && strlen($flushBuffer) > 0) {
-            echo "data: " . json_encode(['text' => $flushBuffer], JSON_UNESCAPED_UNICODE) . "\n\n";
-            flush();
-        }
-        // Убираем галлюцинации LLM после закрывающего тега
-        if ($isToolCallMode && str_contains($fullReply, '</tool_call>')) {
-            $fullReply = substr($fullReply, 0, strpos($fullReply, '</tool_call>') + 12);
-        }
-        
         $globalFullReply .= $fullReply;
         $finalInTokens += $inTokens;
         $finalOutTokens += $outTokens;
@@ -331,147 +334,168 @@ $maxIterations = 5;
             $finalCostEnergy += (int)ceil((($inTokens / 1000000) * $priceIn * 1000) + (($outTokens / 1000000) * $priceOut * 1000));
         }
         
-        if ($isToolCallMode && str_contains($toolBuffer, '</tool_call>')) {
-            $jsonStr = substr($toolBuffer, strpos($toolBuffer, '<tool_call>') + 11);
-            $jsonStr = substr($jsonStr, 0, strpos($jsonStr, '</tool_call>'));
-            $jsonStr = trim($jsonStr);
+        if (!empty($toolCallsFromGateway)) {
+            $formattedToolCalls = [];
+            foreach ($toolCallsFromGateway as &$tc) {
+                if (empty($tc['id'])) {
+                    $tc['id'] = uniqid('call_');
+                }
+                $formattedToolCalls[] = [
+                    'id' => $tc['id'],
+                    'type' => 'function',
+                    'function' => [
+                        'name' => $tc['name'] ?? '',
+                        'arguments' => $tc['arguments'] ?? ''
+                    ]
+                ];
+            }
+            unset($tc);
+
+            $body['messages'][] = [
+                'role' => 'assistant',
+                'content' => $fullReply ?: null,
+                'tool_calls' => $formattedToolCalls
+            ];
             
-            // Фикс для неэкранированных переносов строк внутри JSON-строк (частая проблема LLM)
-            $jsonStr = preg_replace_callback('/"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"/s', function($m) {
-                return str_replace(["\r", "\n"], ['\r', '\n'], $m[0]);
-            }, $jsonStr);
-            
-            $toolData = json_decode($jsonStr, true);
-            
-            if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'web_search') {
-                $query = $toolData['query'] ?? '';
-                echo "data: " . json_encode(['tool_status' => '🔍 Ищу: ' . $query], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $searchCh = curl_init();
-                curl_setopt($searchCh, CURLOPT_URL, env('GATEWAY_URL') . '?action=search');
-                curl_setopt($searchCh, CURLOPT_POST, true);
-                curl_setopt($searchCh, CURLOPT_POSTFIELDS, json_encode(['query' => $query], JSON_UNESCAPED_UNICODE));
-                curl_setopt($searchCh, CURLOPT_HTTPHEADER, [
-                    'Content-Type: application/json',
-                    'Authorization: Bearer ' . env('GATEWAY_API_TOKEN')
-                ]);
-                curl_setopt($searchCh, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($searchCh, CURLOPT_TIMEOUT, 60);
-                $searchResRaw = curl_exec($searchCh);
-                curl_close($searchCh);
-                
-                $searchRes = json_decode($searchResRaw, true);
-                $resultText = $searchRes['result'] ?? "Ошибка: поиск не дал результатов.";
-                
-                echo "data: " . json_encode(['tool_status' => '✅ Результаты получены. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $body['messages'][] = [
-                    'role' => 'assistant',
-                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
-                ];
-                $body['messages'][] = [
-                    'role' => 'user',
-                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на эти данные."
-                ];
-                
-                // ВАЖНО: обновляем json_encode тела для следующего цикла
-                continue;
-            } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'calculator') {
-                $a = $toolData['a'] ?? null;
-                $operator = $toolData['operator'] ?? null;
-                $b = $toolData['b'] ?? null;
-                
-                echo "data: " . json_encode(['tool_status' => "🧮 Вычисляю: $a $operator $b"], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $resultText = tool_calculator($a, $operator, $b);
-                
-                echo "data: " . json_encode(['tool_status' => '✅ Результат вычислен. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $body['messages'][] = [
-                    'role' => 'assistant',
-                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
-                ];
-                $body['messages'][] = [
-                    'role' => 'user',
-                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на результат вычисления."
-                ];
-                
-                continue;
-            } else if ($toolData && isset($toolData['tool']) && ($toolData['tool'] === 'generate_image' || $toolData['tool'] === 'generate_music')) {
-                $toolName = $toolData['tool'];
-                
-                if ($toolName === 'generate_image') {
-                    echo "data: " . json_encode(['tool_status' => "🎨 Рисую изображение..."], JSON_UNESCAPED_UNICODE) . "\n\n";
-                    flush();
-                    $resultText = call_generate_image($toolData);
+            // Генерируем красивый блок с тулами для фронтенда
+            $toolBlock = "";
+            foreach ($toolCallsFromGateway as $tc) {
+                $tName = $tc['name'] ?? 'unknown';
+                $tArgs = $tc['arguments'] ?? [];
+                if (is_array($tArgs)) {
+                    $tArgsJson = json_encode($tArgs, JSON_UNESCAPED_UNICODE);
                 } else {
-                    echo "data: " . json_encode(['tool_status' => "🎵 Пишу музыку..."], JSON_UNESCAPED_UNICODE) . "\n\n";
-                    flush();
-                    $resultText = call_generate_music($toolData);
+                    $tArgsJson = $tArgs;
+                }
+                $toolBlock .= "<tool_use>\n{\"name\": \"{$tName}\", \"args\": {$tArgsJson}}\n</tool_use>\n";
+            }
+            
+            // Отправляем блок в стрим, добавляя пробелы для предотвращения слипания текста
+            if ($globalFullReply !== '') {
+                $globalFullReply .= "\n\n";
+                echo "data: " . json_encode(['text' => "\n\n" . $toolBlock . "\n\n"], JSON_UNESCAPED_UNICODE) . "\n\n";
+            } else {
+                echo "data: " . json_encode(['text' => $toolBlock . "\n\n"], JSON_UNESCAPED_UNICODE) . "\n\n";
+            }
+            flush();
+            
+            $globalFullReply .= $toolBlock . "\n\n";
+            
+            foreach ($toolCallsFromGateway as &$tcRef) {
+                if (($tcRef['name'] ?? '') === 'web_search') {
+                    if ($multiCh === null) $multiCh = curl_multi_init();
+                    
+                    $tArgs = $tcRef['arguments'] ?? [];
+                    $toolData = is_string($tArgs) ? (json_decode($tArgs, true) ?: []) : $tArgs;
+                    $query = $toolData['query'] ?? '';
+                    
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, env('GATEWAY_URL') . '?action=search');
+                    curl_setopt($ch, CURLOPT_POST, true);
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['query' => $query], JSON_UNESCAPED_UNICODE));
+                    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                        'Content-Type: application/json',
+                        'Authorization: Bearer ' . env('GATEWAY_API_TOKEN')
+                    ]);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+                    curl_multi_add_handle($multiCh, $ch);
+                    
+                    $searchRequests[] = [
+                        'tc' => &$tcRef,
+                        'ch' => $ch,
+                        'query' => $query
+                    ];
+                }
+            }
+
+            if (!empty($searchRequests)) {
+                $queries = array_column($searchRequests, 'query');
+                $statusText = '🔍 Ищу: ' . implode(', ', $queries);
+                echo "data: " . json_encode(['tool_status' => $statusText], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+
+                $running = null;
+                do {
+                    curl_multi_exec($multiCh, $running);
+                    curl_multi_select($multiCh);
+                } while ($running > 0);
+
+                foreach ($searchRequests as $req) {
+                    $raw = curl_multi_getcontent($req['ch']);
+                    $res = json_decode($raw, true);
+                    $req['tc']['result'] = $res['result'] ?? "Ошибка: поиск не дал результатов.";
+                    curl_multi_remove_handle($multiCh, $req['ch']);
+                    curl_close($req['ch']);
+                }
+                curl_multi_close($multiCh);
+                
+                echo "data: " . json_encode(['tool_status' => '✅ Результаты поиска получены. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                flush();
+            }
+            unset($tcRef);
+            
+            foreach ($toolCallsFromGateway as $tc) {
+                $toolId = $tc['id'] ?? uniqid('call_');
+                $toolName = $tc['name'] ?? '';
+                
+                $toolArgs = $tc['arguments'] ?? [];
+                if (is_string($toolArgs)) {
+                    $toolData = json_decode($toolArgs, true) ?: [];
+                } else {
+                    $toolData = $toolArgs;
                 }
                 
-                echo "data: " . json_encode(['tool_status' => '✅ Медиа сгенерировано. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
+                $resultText = "Ошибка: инструмент не найден или не поддерживается.";
+                
+                if ($toolName === 'web_search') {
+                    $resultText = $tc['result'] ?? "Ошибка: результат поиска потерян.";
+                } else if ($toolName === 'calculator') {
+                    $a = $toolData['a'] ?? null;
+                    $operator = $toolData['operator'] ?? null;
+                    $b = $toolData['b'] ?? null;
+                    
+                    echo "data: " . json_encode(['tool_status' => "🧮 Вычисляю: $a $operator $b"], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    flush();
+                    
+                    $resultText = tool_calculator($a, $operator, $b);
+                    
+                    echo "data: " . json_encode(['tool_status' => '✅ Результат вычислен. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    flush();
+                } else if ($toolName === 'generate_image' || $toolName === 'generate_music') {
+                    if ($toolName === 'generate_image') {
+                        echo "data: " . json_encode(['tool_status' => "🎨 Рисую изображение..."], JSON_UNESCAPED_UNICODE) . "\n\n";
+                        flush();
+                        $resultText = call_generate_image($toolData);
+                    } else {
+                        echo "data: " . json_encode(['tool_status' => "🎵 Пишу музыку..."], JSON_UNESCAPED_UNICODE) . "\n\n";
+                        flush();
+                        $resultText = call_generate_music($toolData);
+                    }
+                    
+                    echo "data: " . json_encode(['tool_status' => '✅ Медиа сгенерировано. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    flush();
+                } else if ($toolName === 'run_python') {
+                    echo "data: " . json_encode(['tool_status' => "🐍 Выполняю Python код..."], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    flush();
+                    
+                    $resultText = call_run_python($toolData);
+                    
+                    echo "data: " . json_encode(['tool_status' => '✅ Код выполнен. Анализирую результат...'], JSON_UNESCAPED_UNICODE) . "\n\n";
+                    flush();
+                }
                 
                 $body['messages'][] = [
-                    'role' => 'assistant',
-                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
+                    'role' => 'tool',
+                    'tool_call_id' => $toolId,
+                    'content' => $resultText
                 ];
-                $body['messages'][] = [
-                    'role' => 'user',
-                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОбязательно вставь полученную ссылку в свой ответ."
-                ];
-                
-                continue;
-            /*
-            } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'fetch_url') {
-                $url = $toolData['url'] ?? '';
-                
-                echo "data: " . json_encode(['tool_status' => "🌍 Читаю страницу..."], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $resultText = tool_fetch_url($url);
-                
-                echo "data: " . json_encode(['tool_status' => '✅ Страница загружена. Формирую ответ...'], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $body['messages'][] = [
-                    'role' => 'assistant',
-                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
-                ];
-                $body['messages'][] = [
-                    'role' => 'user',
-                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь на вопрос пользователя, опираясь на содержимое страницы."
-                ];
-                
-                continue;
-            */
-            } else if ($toolData && isset($toolData['tool']) && $toolData['tool'] === 'run_python') {
-                echo "data: " . json_encode(['tool_status' => "🐍 Выполняю Python код..."], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $resultText = call_run_python($toolData);
-                
-                echo "data: " . json_encode(['tool_status' => '✅ Код выполнен. Анализирую результат...'], JSON_UNESCAPED_UNICODE) . "\n\n";
-                flush();
-                
-                $body['messages'][] = [
-                    'role' => 'assistant',
-                    'content' => "<tool_call>\n" . json_encode($toolData, JSON_UNESCAPED_UNICODE) . "\n</tool_call>"
-                ];
-                $body['messages'][] = [
-                    'role' => 'user',
-                    'content' => "<tool_result>\n{$resultText}\n</tool_result>\nОтветь пользователю на основе вывода кода. Если были сгенерированы графики, обязательно вставь их ссылки в свой ответ."
-                ];
-                
-                continue;
             }
+            
+            // Продолжаем цикл для отправки результатов обратно модели
+            continue;
         }
-        
+
         break; // No tool call or failed to parse, exit loop
     }
     

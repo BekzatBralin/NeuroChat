@@ -110,6 +110,9 @@ export function formatMd(text) {
   text = text.replace(/\[audio\]\(([^)]+)\)/g,
     (_, url) => `<audio controls style="width:100%;margin-top:8px;border-radius:8px;"><source src="${url}" type="audio/mpeg"></audio>`);
 
+  // Standard Links
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>');
+
   // Italic
   text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
@@ -147,8 +150,39 @@ export function renderMarkdown(text) {
   // Merge consecutive think blocks (e.g. separated by a tool call)
   text = text.replace(/<\/think>[\s\n]*(?:<tool_call>[\s\S]*?<\/tool_call>)?[\s\n]*<think>/g, '\n\n');
   
-  // Completely hide any remaining tool calls from the final output
+  // Hide old XML tool_calls just in case
   text = text.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
+  
+  // Format Tool Use blocks
+  text = text.replace(/<tool_use>([\s\S]*?)<\/tool_use>/g, (match, p1) => {
+    try {
+      const data = JSON.parse(p1.trim());
+      const name = data.name || 'unknown';
+      let title = `🛠 Инструмент: ${name}`;
+      
+      if (name === 'web_search') {
+        const query = data.args?.query || '';
+        title = `🔍 Поиск: ${query}`;
+      } else if (name === 'run_python') {
+        title = `🐍 Выполнение Python скрипта`;
+      } else if (name === 'calculator') {
+        title = `🧮 Расчет: ${data.args?.a} ${data.args?.operator} ${data.args?.b}`;
+      } else if (name === 'generate_image') {
+        title = `🎨 Рисую изображение...`;
+      } else if (name === 'generate_music') {
+        title = `🎵 Пишу музыку...`;
+      }
+      
+      const argsFormatted = escapeHtml(JSON.stringify(data.args, null, 2));
+      
+      return `\n\n<details class="tool-use-block">
+        <summary class="tool-use-summary">${title}</summary>
+        <div class="tool-use-content"><pre><code>${argsFormatted}</code></pre></div>
+      </details>\n\n`;
+    } catch (e) {
+      return ''; // fallback hide if invalid JSON
+    }
+  });
 
   let html = '';
   // Используем регулярку для поиска закрытых или открытых блоков think в любом месте текста
@@ -191,5 +225,5 @@ export function renderMarkdown(text) {
     html += formatMd(autoCloseMarkdown(remainingText));
   }
 
-  return DOMPurify.sanitize(html, { ADD_TAGS: ['details', 'summary'] });
+  return DOMPurify.sanitize(html, { ADD_TAGS: ['details', 'summary'], ADD_ATTR: ['target'] });
 }

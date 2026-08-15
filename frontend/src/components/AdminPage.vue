@@ -1,9 +1,9 @@
 <template>
   <div class="admin-page page">
     <div class="topbar">
-      <button class="btn-back" @click="$emit('close')">
+      <button class="btn-back" @click="handleBack">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-        Назад к чату
+        {{ isExternalApp ? 'Закрыть' : 'Назад к чату' }}
       </button>
       <div class="page-title">Панель управления</div>
       <span class="admin-badge">ADMIN</span>
@@ -385,6 +385,18 @@ const emit = defineEmits(['close']);
 const loading = ref(true);
 const error = ref(null);
 const activeTab = ref('dashboard');
+
+// Detect if opened from the mobile/pc app
+const urlFrom = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('from') : null;
+const isExternalApp = urlFrom === 'mobile' || urlFrom === 'pc';
+
+function handleBack() {
+  if (isExternalApp) {
+    window.close();
+  } else {
+    emit('close');
+  }
+}
 
 const models = ref([]);
 const users = ref([]);
