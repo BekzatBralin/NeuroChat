@@ -2,6 +2,7 @@
 // ── Загрузка файлов: аватарки и изображения для чата ─────────────────────────
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['auth_guard'];
+require_once __DIR__ . '/vision.php';
 
 
 header('Content-Type: application/json; charset=utf-8');
@@ -119,16 +120,13 @@ function saveUploadedFileOrFail(array $file, string $dest, string $context): voi
         'last_error'     => $lastErr['message'] ?? '',
     ];
     error_log('[UPLOAD FAIL] ' . json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-    echo json_encode([
-        'error' => 'Не удалось сохранить файл',
-        'debug' => $details,
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['error' => 'Не удалось сохранить файл'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 // ── КОНФИГУРАЦИЯ ──────────────────────────────────────────────────────────────
 $allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/ogg'];
-$maxSize     = 10 * 1024 * 1024; // 10 МБ
+$maxSize     = $type === 'chat_image' ? chatPhotoMaxBytes() : 10 * 1024 * 1024;
 
 if (empty($_FILES['file'])) {
     echo json_encode(['error' => 'Файл не получен']); exit;
@@ -137,14 +135,25 @@ if (empty($_FILES['file'])) {
 $file = $_FILES['file'];
 
 if ($file['error'] !== UPLOAD_ERR_OK) {
+    if ($type === 'chat_image' && in_array($file['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+        echo json_encode(['error' => 'Фото слишком большое для сервера']); exit;
+    }
     echo json_encode(['error' => 'Ошибка загрузки: код ' . $file['error']]); exit;
 }
 if ($file['size'] > $maxSize) {
-    echo json_encode(['error' => 'Файл слишком большой (макс. 5 МБ)']); exit;
+    echo json_encode(['error' => 'Файл слишком большой (макс. ' . round($maxSize / 1024 / 1024, 1) . ' МБ)']); exit;
 }
 
 // Проверяем MIME через fileinfo + fallback по расширению
 $realMime = normalizedUploadMime($file);
+
+if ($type === 'chat_image') {
+    $realMime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+    $dimensions = @getimagesize($file['tmp_name']);
+    if (!in_array($realMime, ['image/jpeg', 'image/png', 'image/webp'], true) || !$dimensions || $dimensions[0] > 10000 || $dimensions[1] > 10000) {
+        echo json_encode(['error' => 'Разрешены только фото JPG, PNG и WebP']); exit;
+    }
+}
 
 if ($type !== 'chat_file' && !in_array($realMime, $allowedMime, true)) {
     echo json_encode(['error' => 'Разрешены только изображения (JPG, PNG, WebP, GIF)']); exit;

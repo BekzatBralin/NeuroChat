@@ -115,7 +115,7 @@ html, body {
     margin: 12px;
     padding: 9px 14px;
     background: var(--accent-dim);
-    border: 1px solid rgba(79,143,255,0.2);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
     border-radius: var(--radius);
     color: var(--accent);
     font-family: var(--sans);
@@ -126,7 +126,7 @@ html, body {
     gap: 7px;
     transition: background 0.15s, border-color 0.15s;
 }
-.btn-new-chat:hover { background: rgba(79,143,255,0.2); border-color: rgba(79,143,255,0.35); }
+.btn-new-chat:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 
 .history-label {
     padding: 8px 16px 4px;
@@ -201,8 +201,8 @@ html, body {
     width: 100%;
     margin-bottom: 8px;
     padding: 7px 10px;
-    background: none;
-    border: 1px solid rgba(79,143,255,0.2);
+    background: var(--accent-dim);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
     border-radius: var(--radius);
     color: var(--accent);
     font-family: var(--sans);
@@ -213,7 +213,7 @@ html, body {
     gap: 6px;
     transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
-.btn-new-project:hover { background: rgba(79,143,255,0.1); border-color: rgba(79,143,255,0.3); }
+.btn-new-project:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 
 .projects-list {
     display: flex;
@@ -857,6 +857,7 @@ html, body {
 .model-option-name      { font-family: var(--mono); font-size: 12px; font-weight: 500; }
 
 .model-option-desc { font-size: 11px; color: var(--text-3); }
+.model-vision-indicator { color: #22c55e; font-weight: 600; margin-right: 4px; }
 
 /* ── SEARCH BUTTON ─────────────────────────────── */
 .btn-search {

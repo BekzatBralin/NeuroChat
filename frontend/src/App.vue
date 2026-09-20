@@ -172,7 +172,7 @@ import { Browser } from '@capacitor/browser';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { PushNotifications } from '@capacitor/push-notifications';
 import DOMPurify from 'dompurify';
-import { renderMarkdown, autoCloseMarkdown, formatMd } from './utils/markdown';
+import { renderMarkdown } from './utils/markdown';
 import Sidebar from './components/Sidebar.vue';
 import ChatArea from './components/ChatArea.vue';
 import MessageInput from './components/MessageInput.vue';
@@ -189,11 +189,11 @@ import RequestHistoryModal from './components/RequestHistoryModal.vue';
 import CodeViewer from './components/CodeViewer.vue';
 import AdminPage from './components/AdminPage.vue';
 import AuthPage from './components/AuthPage.vue';
-import { MODELS, state, addToast, loadModels } from './services/config.js';
+import { MODELS, UPLOAD_LIMITS, state, addToast, loadModels } from './services/config.js';
 
 const isTauri = !!window.__TAURI_INTERNALS__;
 import {
-  streamChat, sendChat, uploadImage, uploadFile,
+  streamChat, sendChat, uploadImage,
   fetchHistory, fetchChat, fetchProjects, fetchProjectChats,
   searchHistory, deleteChat, renameChat as apiRenameChat,
   createProject as apiCreateProject,
@@ -380,6 +380,7 @@ function generateId() {
 // ── Model Change ─────────────────────────────────
 function onModelChange(model) {
   state.model = model;
+  localStorage.setItem('selectedModel', model);
 }
 
 // ── History ──────────────────────────────────────
@@ -440,7 +441,7 @@ async function onSelectChat(uid) {
 
     const chatMeta = historyChats.value.find(c => c.uid === uid);
     chatTitle.value = chatMeta?.title || 'Чат';
-    state.model = chatMeta?.model || 'rigel';
+    state.model = chatMeta?.model || localStorage.getItem('selectedModel') || 'rigel';
     setUrl(uid);
 
     nextTick(() => {
@@ -560,8 +561,16 @@ async function onSearchHistory(query, deep) {
 // ── Files ────────────────────────────────────────
 function onFilesSelected(files) {
   for (const f of files) {
-    if (f.size > 5 * 1024 * 1024) {
-      addToast(`Файл ${f.name} слишком большой (макс. 5 МБ)`, 'error');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) {
+      addToast(`Формат ${f.name} не поддерживается. Подойдут JPG, PNG и WebP.`, 'error');
+      continue;
+    }
+    if (f.size > UPLOAD_LIMITS.imageBytes) {
+      addToast(`Фото ${f.name} слишком большое (макс. ${(UPLOAD_LIMITS.imageBytes / 1024 / 1024).toFixed(1)} МБ)`, 'error');
+      continue;
+    }
+    if (state.attachedFiles.length) {
+      addToast('Пока можно прикрепить одно фото к сообщению.', 'error');
       continue;
     }
     state.attachedFiles.push(f);
@@ -725,9 +734,10 @@ function estimateTokens(messages) {
 }
 
 // ── Send Message ─────────────────────────────────
+let isPreparingMessage = false;
 async function sendMessage() {
   const text = messageText.value.trim();
-  if ((!text && !state.attachedFiles.length) || state.isLoading) return;
+  if ((!text && !state.attachedFiles.length) || state.isLoading || isPreparingMessage) return;
 
   const contextTokens = estimateTokens(state.messages) + estimateTokens([{ content: text }]);
   if (contextTokens > 10000) {
@@ -753,48 +763,27 @@ async function sendMessage() {
 }
 
 async function proceedSendMessage(text) {
-  // Check file support: сначала спрашиваем кеш гейтвея, fallback на MODELS
-  const imgSupport = modelSupportsImages(state.model);
-  let allowFiles = false;
-  if (imgSupport !== null) {
-    allowFiles = imgSupport;
-  } else {
-    allowFiles = MODELS[state.model]?.supportsFiles || false;
-  }
-  if (state.attachedFiles.length > 0 && !allowFiles) {
-    state.messages.push({ role: 'assistant', content: '❌ Данная модель не поддерживает файлы и изображения.' });
+  if (isPreparingMessage) return;
+  if (state.attachedFiles.length > 0 && !modelSupportsImages(state.model)) {
+    addToast('Эта модель не поддерживает фото. Выберите модель с зелёной меткой «Фото».', 'error');
     return;
   }
 
   let userContent = text;
   const imageParts = [];
-  const fileParts = [];
 
-  // Upload files
-  for (const file of state.attachedFiles) {
-    if (file.type.startsWith('image/')) {
-      try {
-        const upData = await uploadImage(file);
-        imageParts.push({ path: upData.path });
-      } catch (e) {
-        state.messages.push({ role: 'assistant', content: `❌ Не удалось загрузить ${file.name}: ${e.message}` });
-        state.attachedFiles = [];
-        return;
-      }
-    } else {
-      try {
-        const upData = await uploadFile(file);
-        fileParts.push({
-          path: upData.path,
-          mime: upData.mime || file.type || 'application/octet-stream',
-          name: file.name,
-        });
-      } catch (e) {
-        state.messages.push({ role: 'assistant', content: `❌ Не удалось обработать ${file.name}: ${e.message}` });
-        state.attachedFiles = [];
-        return;
-      }
+  // Upload the photo before sending the message.
+  isPreparingMessage = true;
+  try {
+    for (const file of state.attachedFiles) {
+      const upData = await uploadImage(file);
+      imageParts.push({ path: upData.path });
     }
+  } catch (e) {
+    addToast(`Не удалось загрузить фото: ${e.message}`, 'error');
+    return;
+  } finally {
+    isPreparingMessage = false;
   }
   state.attachedFiles = [];
 
@@ -803,7 +792,6 @@ async function proceedSendMessage(text) {
     role: 'user',
     content: userContent,
     images: imageParts,
-    files: fileParts,
     image_path: imageParts[0]?.path ?? null,
   });
 
@@ -1315,7 +1303,7 @@ onMounted(async () => {
         await loadHistory();
         const chatMeta = historyChats.value.find(c => c.uid === urlChatId);
         chatTitle.value = chatMeta?.title || 'Чат';
-        state.model = chatMeta?.model || 'rigel';
+        state.model = chatMeta?.model || localStorage.getItem('selectedModel') || 'rigel';
       }
     } catch {}
   } else {

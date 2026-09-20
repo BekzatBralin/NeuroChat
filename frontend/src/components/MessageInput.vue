@@ -28,7 +28,7 @@
 
     <div class="input-row" id="input-row">
       <!-- Attach button -->
-      <button class="btn-attach" @click="handleAttachClick" title="Прикрепить файл" id="btn-attach">
+      <button class="btn-attach" @click="handleAttachClick" :title="canAttachPhoto ? 'Прикрепить фото' : 'Выберите модель с поддержкой Vision'" id="btn-attach">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
         </svg>
@@ -37,8 +37,7 @@
         ref="fileInput"
         type="file"
         id="file-input"
-        multiple
-        accept="image/*,.pdf,.docx,.txt,.md,.js,.py,.php,.css,.html,.json,.csv"
+        accept="image/jpeg,image/png,image/webp"
         @change="onFileChange"
         style="display:none;"
       >
@@ -59,7 +58,10 @@
           <div class="model-dropdown" :class="{ open: showModelDropdown }" id="model-dropdown">
             <div v-for="(m, key) in MODELS" :key="key" class="model-option" :class="{ selected: model === key }" @click="selectModel(key)">
               <span class="model-option-name" :style="{ color: m.cls }">{{ m.label }}</span>
-              <span class="model-option-desc">{{ m.description || 'NeuroChat Model' }}</span>
+              <span class="model-option-desc">
+                <span v-if="m.supportsImageInput" class="model-vision-indicator" title="Поддерживает фото">● Фото</span>
+                {{ m.description || 'NeuroChat Model' }}
+              </span>
             </div>
           </div>
         </div>
@@ -250,9 +252,14 @@ let recognition = null;
 
 const currentModelLabel = computed(() => MODELS[props.model]?.label || props.model);
 const currentModelCls = computed(() => MODELS[props.model]?.cls || 'flash');
+const canAttachPhoto = computed(() => MODELS[props.model]?.supportsImageInput === true);
 
 function handleAttachClick() {
-  addToast("Извините, загрузка файлов временно отключена администрацией!", "error");
+  if (!canAttachPhoto.value) {
+    addToast('Эта модель не поддерживает фото. Выберите модель с зелёной меткой «Фото».', 'error');
+    return;
+  }
+  document.getElementById('file-input')?.click();
 }
 
 const placeholder = computed(() => {
@@ -263,6 +270,15 @@ const placeholder = computed(() => {
 
 // Object URLs cache
 const objectUrls = new Map();
+
+watch(() => [...props.attachedFiles], files => {
+  for (const [file, url] of objectUrls) {
+    if (!files.includes(file)) {
+      URL.revokeObjectURL(url);
+      objectUrls.delete(file);
+    }
+  }
+});
 
 function getObjectUrl(file) {
   if (!objectUrls.has(file)) {

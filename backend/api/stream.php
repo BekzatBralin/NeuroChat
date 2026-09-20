@@ -9,6 +9,7 @@ require_once __DIR__ . '/tools/calculator.php';
 require_once __DIR__ . '/tools/fetch_url.php';
 require_once __DIR__ . '/tools/media_tools.php';
 require_once __DIR__ . '/tools/e2b_tool.php';
+require_once __DIR__ . '/vision.php';
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -36,9 +37,6 @@ if (empty($messages)) {
     flush(); exit;
 }
 
-// Удаляем старый чат если это редактирование
-if ($oldChatId) deleteChat($oldChatId, $userId);
-
 // Проверка энергии
 $stmt = getDB()->prepare('SELECT backend_model, base_energy, price_input, price_output FROM models WHERE key_name = ? AND is_active = 1');
 $stmt->execute([$modelKey]);
@@ -46,6 +44,13 @@ $dbModel = $stmt->fetch();
 
 if (!$dbModel) {
     echo "data: " . json_encode(['error' => "Модель {$modelKey} не найдена или отключена."]) . "\n\n";
+    flush(); exit;
+}
+
+try {
+    $visionEnabled = validateMessagePhotos($messages, $dbModel['backend_model'] ?: $modelKey, $userId);
+} catch (InvalidArgumentException $e) {
+    echo "data: " . json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_UNICODE) . "\n\n";
     flush(); exit;
 }
 
@@ -67,6 +72,8 @@ if ($totalEnergy > 0 && $userEnergy < $totalEnergy && $currentUser['role'] !== '
     echo "data: " . json_encode(['error' => "Недостаточно энергии. Требуется {$totalEnergy}⚡ (модель {$baseEnergy} + агент {$agentEnergy}), у вас {$userEnergy}⚡."]) . "\n\n";
     flush(); exit;
 }
+
+if ($oldChatId) deleteChat($oldChatId, $userId);
 
 // Сохраняем чат и сообщения пользователя
 if ($chatUid && !$isTemp) {
@@ -231,6 +238,7 @@ function getDayOfWeek($dayNum) {
 }
 
 // Гарантируем stream=true в теле
+$body['messages'] = attachPhotosToGatewayMessages($body['messages'], $userId, $visionEnabled);
 $body['stream'] = true;
 if (!empty($body['no_cache'])) {
     $body['no_cache'] = true;
@@ -340,22 +348,31 @@ $maxIterations = 5;
                 if (empty($tc['id'])) {
                     $tc['id'] = uniqid('call_');
                 }
+                $args = $tc['arguments'] ?? '';
+                if (is_array($args)) {
+                    $args = json_encode($args, JSON_UNESCAPED_UNICODE);
+                }
                 $formattedToolCalls[] = [
                     'id' => $tc['id'],
                     'type' => 'function',
                     'function' => [
                         'name' => $tc['name'] ?? '',
-                        'arguments' => $tc['arguments'] ?? ''
+                        'arguments' => (string)$args
                     ]
                 ];
             }
             unset($tc);
 
-            $body['messages'][] = [
+            $assistantMsg = [
                 'role' => 'assistant',
-                'content' => $fullReply ?: null,
                 'tool_calls' => $formattedToolCalls
             ];
+            // Некоторые модели (напр. OX Alpha) не принимают content: null и отвечают 400.
+            // Включаем content только если он непустой.
+            if ($fullReply !== '' && $fullReply !== null) {
+                $assistantMsg['content'] = $fullReply;
+            }
+            $body['messages'][] = $assistantMsg;
             
             // Генерируем красивый блок с тулами для фронтенда
             $toolBlock = "";

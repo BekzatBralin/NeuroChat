@@ -581,7 +581,11 @@ function getMessages(string $uid, int $userId): array {
     $msgs = $stmt->fetchAll();
     foreach ($msgs as &$m) {
         $m['cacheType'] = (bool)$m['cacheType'];
+        if ($m['role'] === 'user' && !empty($m['image_path'])) {
+            $m['images'] = [['path' => $m['image_path']]];
+        }
     }
+    unset($m);
     return $msgs;
 }
 

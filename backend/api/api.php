@@ -6,6 +6,7 @@ set_time_limit(300);
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['auth_guard'];
 require_once PATHS['db'];
+require_once __DIR__ . '/vision.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -25,9 +26,6 @@ $isTemp    = (bool)($body['isTemp'] ?? false);
 
 if (empty($messages)) { echo json_encode(['error' => 'Нет сообщений']); exit; }
 
-// Удаляем старый чат если это редактирование
-if ($oldChatId) deleteChat($oldChatId, $userId);
-
 // Проверка энергии
 $stmt = getDB()->prepare('SELECT backend_model, base_energy, price_input, price_output FROM models WHERE key_name = ? AND is_active = 1');
 $stmt->execute([$modelKey]);
@@ -38,6 +36,14 @@ if (!$dbModel) {
     exit;
 }
 
+try {
+    $visionEnabled = validateMessagePhotos($messages, $dbModel['backend_model'] ?: $modelKey, $userId);
+} catch (InvalidArgumentException $e) {
+    http_response_code(422);
+    echo json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $baseEnergy = (int)$dbModel['base_energy'];
 $userEnergy = (int)($currentUser['energy'] ?? 0);
 
@@ -45,6 +51,8 @@ if ($baseEnergy > 0 && $userEnergy < $baseEnergy && $currentUser['role'] !== 'ad
     echo json_encode(['error' => "Недостаточно энергии. Требуется {$baseEnergy}⚡, у вас {$userEnergy}⚡."]);
     exit;
 }
+
+if ($oldChatId) deleteChat($oldChatId, $userId);
 
 // Сохраняем чат и сообщения пользователя
 if ($chatUid && !$isTemp) {
@@ -99,6 +107,7 @@ if (!empty($userVars) && isset($body['messages']) && is_array($body['messages'])
 
 // Внедрение скиллов
 $body['messages'] = injectSkillsIntoMessages($body['messages'] ?? [], $userId, $chatUid);
+$body['messages'] = attachPhotosToGatewayMessages($body['messages'], $userId, $visionEnabled);
 
 // Проксируем на общий шлюз
 $targetUrl = env('GATEWAY_URL');

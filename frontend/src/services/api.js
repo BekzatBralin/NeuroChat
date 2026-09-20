@@ -1,4 +1,4 @@
-import { PATHS } from './config.js';
+import { PATHS, MODELS } from './config.js';
 
 // The global fetch is now overridden in main.js to handle JWT auth and 401s
 
@@ -78,8 +78,10 @@ export async function uploadImage(file) {
     fd.append('type', 'chat_image');
     fd.append('file', file);
     const res  = await fetch(PATHS.upload, { method: 'POST', body: fd });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Ошибка загрузки изображения');
+    const rawBody = await res.text();
+    let data = null;
+    try { data = rawBody ? JSON.parse(rawBody) : null; } catch { data = null; }
+    if (!res.ok || !data?.ok) throw new Error(data?.error || `Ошибка загрузки изображения (HTTP ${res.status})`);
     return data;
 }
 
@@ -181,9 +183,7 @@ export async function fetchModels() {
 }
 
 export function modelSupportsImages(model) {
-    if (!model) return false;
-    // Just a basic check for vision models or fallback
-    return model.includes('vision') || model.includes('claude-3');
+    return MODELS[model]?.supportsImageInput === true;
 }
 
 export async function getShareChat(token) {

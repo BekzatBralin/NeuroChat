@@ -11,12 +11,16 @@ export const PATHS = {
 };
 
 export const MODELS = reactive({});
+export const UPLOAD_LIMITS = reactive({ imageBytes: 2 * 1024 * 1024 });
 
 export async function loadModels() {
     try {
         const res = await fetch('/api/models.php');
         if (res.ok) {
             const data = await res.json();
+            if (Number.isFinite(data.max_image_bytes) && data.max_image_bytes > 0) {
+                UPLOAD_LIMITS.imageBytes = data.max_image_bytes;
+            }
             Object.keys(MODELS).forEach(k => delete MODELS[k]);
             data.models.forEach(m => {
                 MODELS[m.key_name] = {
@@ -26,6 +30,7 @@ export async function loadModels() {
                     typeSpeed: 2,
                     isStream: m.is_stream == 1,
                     supportsFiles: m.supports_files == 1,
+                    supportsImageInput: m.supports_image_input === true,
                     description: m.description
                 };
             });
@@ -44,7 +49,7 @@ export const NVL_MODELS = [
 ];
 
 export const state = reactive({
-    model:              'rigel',
+    model:              localStorage.getItem('selectedModel') || 'rigel',
     useSearch:          Number(localStorage.getItem('searchActive')) === 1 ? (Number(localStorage.getItem('defaultSearchMode')) || 3) : 0,
     defaultSearchMode:  Number(localStorage.getItem('defaultSearchMode')) || 3,
     useAgent:           true,

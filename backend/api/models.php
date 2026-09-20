@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../settings.php';
 require_once PATHS['auth_guard'];
 require_once PATHS['db'];
+require_once __DIR__ . '/vision.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -40,7 +41,12 @@ if (isset($_GET['admin']) && $currentUser['role'] === 'admin') {
 }
 
 // For frontend chat (public, active only)
-$stmt = getDB()->query("SELECT key_name, display_name, color_class, accent_color, is_stream, supports_files, description, base_energy FROM models WHERE is_active = 1 AND key_name NOT IN ('stt', 'tts', 'agent') ORDER BY sort_order ASC, display_name ASC");
+$stmt = getDB()->query("SELECT key_name, display_name, backend_model, color_class, accent_color, is_stream, supports_files, description, base_energy FROM models WHERE is_active = 1 AND key_name NOT IN ('stt', 'tts', 'agent') ORDER BY sort_order ASC, display_name ASC");
 $models = $stmt->fetchAll(PDO::FETCH_ASSOC);
+foreach ($models as &$model) {
+    $model['supports_image_input'] = modelAcceptsChatPhoto($model['backend_model'] ?: $model['key_name']);
+    unset($model['backend_model']);
+}
+unset($model);
 
-echo json_encode(['models' => $models]);
+echo json_encode(['models' => $models, 'max_image_bytes' => chatPhotoMaxBytes()]);
