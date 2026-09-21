@@ -3,7 +3,7 @@
     <div class="topbar">
       <button class="btn-back" @click="handleBack">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-        {{ isExternalApp ? 'Закрыть' : 'Назад к чату' }}
+        {{ isExternalApp || isEmbeddedApp ? 'Закрыть' : 'Назад к чату' }}
       </button>
       <div class="page-title">Панель управления</div>
       <span class="admin-badge">ADMIN</span>
@@ -389,9 +389,14 @@ const activeTab = ref('dashboard');
 // Detect if opened from the mobile/pc app
 const urlFrom = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('from') : null;
 const isExternalApp = urlFrom === 'mobile' || urlFrom === 'pc';
+const isEmbeddedApp = typeof window !== 'undefined'
+  && window.self !== window.top
+  && new URLSearchParams(window.location.search).get('embed') === 'mobile';
 
 function handleBack() {
-  if (isExternalApp) {
+  if (isEmbeddedApp) {
+    window.parent.postMessage({ type: 'neurochat-admin-close' }, '*');
+  } else if (isExternalApp) {
     window.close();
   } else {
     emit('close');

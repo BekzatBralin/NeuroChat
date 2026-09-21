@@ -26,8 +26,25 @@ function getDB(): PDO {
     ensureModelsTable($pdo);
     ensureInfoDocsTable($pdo);
     ensureSettingsTable($pdo);
+    ensureAdminNotificationReceiptsTable($pdo);
     
     return $pdo;
+}
+
+function ensureAdminNotificationReceiptsTable(PDO $db): void {
+    try {
+        $db->exec(
+            'CREATE TABLE IF NOT EXISTS `admin_notification_receipts` (
+                `notification_id` INT NOT NULL,
+                `user_id` INT NOT NULL,
+                `read_at` INT NOT NULL,
+                PRIMARY KEY (`notification_id`, `user_id`),
+                KEY `idx_user_id` (`user_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+    } catch (\Exception $e) {
+        error_log('[NeuroChat] Warning: Could not ensure admin_notification_receipts table: ' . $e->getMessage());
+    }
 }
 
 function ensureChatProjectsTable(PDO $db): void {

@@ -76,6 +76,16 @@ CREATE TABLE `admin_notifications` (
 
 -- --------------------------------------------------------
 
+CREATE TABLE `admin_notification_receipts` (
+  `notification_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `read_at` int(11) NOT NULL,
+  PRIMARY KEY (`notification_id`,`user_id`),
+  KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
 --
 -- Структура таблицы `auth_tokens`
 --

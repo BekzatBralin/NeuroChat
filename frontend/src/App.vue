@@ -205,6 +205,39 @@ import {
   fetchModels, modelSupportsImages,
 } from './services/api.js';
 
+function isEmbeddedAdminFrame() {
+  const params = new URLSearchParams(window.location.search);
+  return window.self !== window.top
+    && window.location.pathname.startsWith('/admin')
+    && params.get('embed') === 'mobile';
+}
+
+function waitForEmbeddedAdminAuth() {
+  if (!isEmbeddedAdminFrame()) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('message', receiveToken);
+      clearTimeout(timeoutId);
+      resolve();
+    };
+    const receiveToken = (event) => {
+      if (event.source !== window.parent || event.data?.type !== 'neurochat-admin-auth') return;
+      const token = typeof event.data.token === 'string' ? event.data.token.trim() : '';
+      if (token.length < 20 || token.length > 4096 || token.split('.').length !== 3) return;
+      localStorage.setItem('nc_token', token);
+      finish();
+    };
+    window.addEventListener('message', receiveToken);
+    window.parent.postMessage({ type: 'neurochat-admin-ready' }, '*');
+    timeoutId = window.setTimeout(finish, 3000);
+  });
+}
+
 // ── Refs ──────────────────────────────────────────
 const chatAreaRef = ref(null);
 const messageInputRef = ref(null);
@@ -1155,6 +1188,8 @@ async function tryMobileAuth(url) {
 // ── Init ─────────────────────────────────────────
 
 onMounted(async () => {
+  await waitForEmbeddedAdminAuth();
+
   // Capture JWT token from web URL
   const urlParams = new URLSearchParams(window.location.search);
   const webToken = urlParams.get('token');
@@ -1195,6 +1230,13 @@ onMounted(async () => {
       state.notificationsEnabled = currentUser.value.notifications !== 0;
     }
   } catch {}
+
+  if (isEmbeddedAdminFrame()) {
+    window.parent.postMessage({
+      type: 'neurochat-admin-authenticated',
+      authorized: currentUser.value?.role === 'admin',
+    }, '*');
+  }
 
     if (!currentUser.value || !currentUser.value.is_approved) {
       isAppLoaded.value = true;

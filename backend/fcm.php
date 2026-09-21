@@ -4,7 +4,7 @@
  * Отправляет FCM push-уведомление через Firebase HTTP v1 API.
  * Использует Service Account для получения OAuth2 токена.
  */
-function sendFcmNotification(array $tokens, string $title, string $body): void {
+function sendFcmNotification(array $tokens, string $title, string $body, ?int $notificationId = null): void {
     if (empty($tokens)) return;
 
     $serviceAccountPath = __DIR__ . '/neurochat-7f22c-firebase-adminsdk-fbsvc-1f14012ef2.json';
@@ -24,22 +24,16 @@ function sendFcmNotification(array $tokens, string $title, string $body): void {
     $url = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
     foreach ($tokens as $token) {
-        $payload = json_encode([
-            'message' => [
-                'token' => $token,
-                'notification' => [
-                    'title' => $title,
-                    'body'  => $body,
-                ],
-                'android' => [
-                    'notification' => [
-                        'channel_id' => 'neurochat_main',
-                        'sound'      => 'default',
-                    ],
-                    'priority' => 'high',
-                ],
-            ]
-        ]);
+        $message = [
+            'token' => $token,
+            'notification' => ['title' => $title, 'body' => $body],
+            'android' => [
+                'notification' => ['channel_id' => 'neurochat_main', 'sound' => 'default'],
+                'priority' => 'high',
+            ],
+        ];
+        if ($notificationId) $message['data'] = ['admin_notification_id' => (string)$notificationId];
+        $payload = json_encode(['message' => $message]);
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
