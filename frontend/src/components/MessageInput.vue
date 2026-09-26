@@ -133,7 +133,7 @@
             <div class="tools-item" style="flex-direction: column; align-items: flex-start;">
               <div class="tools-item-text">
                 <span>Креативность</span>
-                <span class="tools-item-hint">По умолчанию модель выбирает сама</span>
+                <span class="tools-item-hint">По умолчанию 0.7</span>
               </div>
               <div style="display:flex;gap:6px;align-items:center;width:100%;margin-top:6px;">
                 <button class="btn-tools" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border-radius:6px;font-size:16px;padding:0" @click.stop="adjustTemperature(-0.1)" title="Уменьшить">-</button>
@@ -141,13 +141,13 @@
                   type="range"
                   class="temperature-slider"
                   min="0" max="2" step="0.1"
-                  :value="temperature ?? 1"
+                  :value="temperature ?? 0.7"
                   @input="onTemperatureChange"
                   title="0.0 - 2.0"
                   style="flex:1"
                 >
                 <button class="btn-tools" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;flex-shrink:0;border-radius:6px;font-size:16px;padding:0" @click.stop="adjustTemperature(0.1)" title="Увеличить">+</button>
-                <span class="temperature-value" style="min-width:24px;text-align:right">{{ temperature !== null ? temperature.toFixed(1) : '—' }}</span>
+                <span class="temperature-value" style="min-width:24px;text-align:right">{{ (temperature ?? 0.7).toFixed(1) }}</span>
               </div>
             </div>
           </div>
@@ -227,7 +227,7 @@ const props = defineProps({
   attachedFiles: { type: Array, default: () => [] },
   useSearch: Number,
   useAgent: Boolean,
-  temperature: { type: Number, default: null },
+  temperature: { type: Number, default: 0.7 },
 });
 
 const emit = defineEmits([
@@ -312,7 +312,7 @@ function onTemperatureChange(e) {
 }
 
 function adjustTemperature(delta) {
-  let val = props.temperature ?? 1;
+  let val = props.temperature ?? 0.7;
   val = Math.max(0, Math.min(2, val + delta));
   emit('update:temperature', Number(val.toFixed(1)));
 }

@@ -62,7 +62,7 @@ export const state = reactive({
     currentProject:     null,
     currentProjectName: '',
     isTemp:             false,
-    temperature:        null,
+    temperature:        0.7,
     toasts:             [],
     notificationsEnabled: true,
 });
